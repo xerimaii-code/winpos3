@@ -7,7 +7,8 @@ import { Tab } from './types';
 import { Database, BookOpen, Terminal, Rocket } from 'lucide-react';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<Tab>(Tab.GUIDE);
+  // Start with SIMULATOR tab by default as requested
+  const [activeTab, setActiveTab] = useState<Tab>(Tab.SIMULATOR);
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-200 selection:bg-blue-500/30">

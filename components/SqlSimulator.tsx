@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Play, Database, Loader2, Sparkles, Code, Wifi, WifiOff, Activity, CheckCircle2, XCircle, AlertTriangle, HelpCircle } from 'lucide-react';
 import { MOCK_USERS } from '../constants';
 import { generateSqlFromNaturalLanguage } from '../services/geminiService';
@@ -9,17 +9,14 @@ export const SqlSimulator: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [testLoading, setTestLoading] = useState(false);
   const [result, setResult] = useState<QueryResult | null>(null);
-  const [useRealApi, setUseRealApi] = useState(false);
+  // Set default to TRUE for auto-connection
+  const [useRealApi, setUseRealApi] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [connectionMsg, setConnectionMsg] = useState('');
 
-  // Function to test simple connectivity without AI
-  const handleTestConnection = async () => {
-    if (!useRealApi) {
-      setConnectionStatus('error');
-      setConnectionMsg('실제 서버 모드를 켜주세요.');
-      return;
-    }
+  // Function to test connectivity
+  const handleTestConnection = useCallback(async () => {
+    if (!useRealApi) return;
 
     setTestLoading(true);
     setConnectionStatus('idle');
@@ -35,10 +32,10 @@ export const SqlSimulator: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query: testQuery }),
-        signal: controller.signal // 타임아웃 연결
+        signal: controller.signal
       });
 
-      clearTimeout(timeoutId); // 응답 오면 타이머 해제
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -48,7 +45,9 @@ export const SqlSimulator: React.FC = () => {
       const json = await response.json();
       if (json.data && json.data.length > 0) {
         setConnectionStatus('success');
-        setConnectionMsg(`연결 성공! (Server: ${json.data[0].version.split('\n')[0].substring(0, 30)}...)`);
+        // DB 이름은 하드코딩하지 않고 일반적인 성공 메시지로 표시
+        const serverVersion = json.data[0].version.split('\n')[0].substring(0, 40);
+        setConnectionMsg(`연결 성공! Server: ${serverVersion}...`);
         setResult({
             sql: testQuery,
             data: json.data
@@ -67,7 +66,14 @@ export const SqlSimulator: React.FC = () => {
     } finally {
       setTestLoading(false);
     }
-  };
+  }, [useRealApi]);
+
+  // Auto-connect on mount
+  useEffect(() => {
+    if (useRealApi) {
+      handleTestConnection();
+    }
+  }, []); // Run once on mount
 
   const handleSimulate = async () => {
     if (!input.trim()) return;
@@ -202,9 +208,9 @@ export const SqlSimulator: React.FC = () => {
                 <div className="flex items-start gap-3">
                    <HelpCircle className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
                    <div className="text-sm text-slate-300 space-y-1">
-                       <p className="font-semibold text-blue-300">실제 서버 연결 모드입니다.</p>
-                       <p>1. 먼저 <strong>[연결 테스트]</strong> 버튼을 눌러 DB 접속이 되는지 확인하세요.</p>
-                       <p>2. 버튼이 계속 로딩되면 <strong>방화벽 문제</strong>입니다. (타임아웃 10초)</p>
+                       <p className="font-semibold text-blue-300">실제 서버(winpos3) 자동 연결 모드입니다.</p>
+                       <p>1. 앱 시작 시 자동으로 <strong>연결 테스트</strong>를 시도합니다.</p>
+                       <p>2. 실패 시 <strong>방화벽</strong> 및 <strong>공유기 설정(9876 포트)</strong>을 확인해주세요.</p>
                        <p className="text-xs text-slate-500 mt-2">* 보안 경고: 실제 운영 DB에는 UPDATE/DELETE 쿼리를 주의해서 사용하세요.</p>
                    </div>
                 </div>
@@ -242,7 +248,7 @@ export const SqlSimulator: React.FC = () => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSimulate()}
-            placeholder={useRealApi ? "실제 DB 쿼리 요청 (예: select * from users where id > 10)" : "예: '관리자(Admin) 권한을 가진 사용자 보여줘'"}
+            placeholder={useRealApi ? "실제 DB 쿼리 요청 (예: select * from POS_MST where id > 10)" : "예: '관리자(Admin) 권한을 가진 사용자 보여줘'"}
             className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg py-4 pl-12 pr-24 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
           />
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 w-5 h-5" />
@@ -258,7 +264,7 @@ export const SqlSimulator: React.FC = () => {
 
         <div className="mt-4 flex flex-wrap gap-2">
           <span className="text-xs text-slate-500 font-mono mt-1">Try:</span>
-          {['모든 사용자 보여줘', 'Admin 유저만 찾아줘', '최근 2명만 보여줘'].map(prompt => (
+          {['현재 DB 버전 확인', '모든 사용자 보여줘', '최근 2명만 보여줘'].map(prompt => (
             <button 
               key={prompt}
               onClick={() => setInput(prompt)}

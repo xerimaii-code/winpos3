@@ -5,11 +5,12 @@ const config = {
   password: process.env.DB_PASSWORD,
   server: process.env.DB_SERVER,
   port: parseInt(process.env.DB_PORT || '1433', 10),
-  database: process.env.DB_DATABASE,
+  // 수정됨: 사용자가 설정한 환경변수 DB_NAME을 최우선으로 사용 (winpos3)
+  database: process.env.DB_NAME || process.env.DB_DATABASE || 'winpos3',
   options: {
     encrypt: process.env.DB_ENCRYPT === 'true', 
     trustServerCertificate: true,
-    connectionTimeout: 10000, // 10초 연결 제한 (Vercel 함수 타임아웃 방지)
+    connectionTimeout: 10000, // 10초 연결 제한
     requestTimeout: 10000     // 10초 쿼리 제한
   },
 };
@@ -47,10 +48,9 @@ export default async function handler(req, res) {
     
   } catch (error) {
     console.error('Database Error Details:', error);
-    // 연결 에러인지 쿼리 에러인지 구분하여 반환
     res.status(500).json({ 
       error: 'Database Error', 
-      details: error.message, // 구체적인 에러 메시지 (Timeout 등)
+      details: error.message, 
       code: error.code
     });
   }
