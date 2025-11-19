@@ -1,0 +1,5 @@
+{
+  "name": "SQL Connect Guide & Simulator",
+  "description": "A React application explaining how to connect a web frontend to MS SQL Server, featuring an architecture guide and a Gemini-powered SQL query simulator.",
+  "requestFramePermissions": []
+}
