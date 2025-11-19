@@ -25,17 +25,24 @@ export const SqlSimulator: React.FC = () => {
     setConnectionStatus('idle');
     setResult(null);
 
+    // 10초 타임아웃 설정
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
     try {
       const testQuery = "SELECT @@VERSION as version";
       const response = await fetch('/api/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: testQuery })
+        body: JSON.stringify({ query: testQuery }),
+        signal: controller.signal // 타임아웃 연결
       });
+
+      clearTimeout(timeoutId); // 응답 오면 타이머 해제
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP Error: ${response.status}`);
+        throw new Error(errorData.error || errorData.details || `HTTP Error: ${response.status}`);
       }
 
       const json = await response.json();
@@ -49,9 +56,14 @@ export const SqlSimulator: React.FC = () => {
       } else {
         throw new Error("No data returned from DB");
       }
-    } catch (e) {
+    } catch (e: any) {
       setConnectionStatus('error');
-      setConnectionMsg(`Connection Failed: ${(e as Error).message}`);
+      
+      if (e.name === 'AbortError') {
+        setConnectionMsg('연결 시간 초과 (Timeout, 10s).\n서버가 응답하지 않습니다. 방화벽이 포트(9876)를 차단 중일 수 있습니다.');
+      } else {
+        setConnectionMsg(`Connection Failed: ${e.message}`);
+      }
     } finally {
       setTestLoading(false);
     }
@@ -69,16 +81,22 @@ export const SqlSimulator: React.FC = () => {
 
       if (useRealApi) {
         // --- REAL API MODE ---
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10초 제한
+
         try {
           const response = await fetch('/api/query', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: sql })
+            body: JSON.stringify({ query: sql }),
+            signal: controller.signal
           });
           
+          clearTimeout(timeoutId);
+
           if (!response.ok) {
             const errData = await response.json().catch(() => ({}));
-            throw new Error(errData.error || `Server responded with ${response.status}`);
+            throw new Error(errData.error || errData.details || `Server responded with ${response.status}`);
           }
 
           const json = await response.json();
@@ -86,11 +104,15 @@ export const SqlSimulator: React.FC = () => {
             sql,
             data: json.data || [],
           });
-        } catch (apiErr) {
+        } catch (apiErr: any) {
+           let errMsg = apiErr.message;
+           if (apiErr.name === 'AbortError') {
+             errMsg = 'Request Timed Out (10s). Check network/firewall.';
+           }
            setResult({
             sql,
             data: [],
-            error: `API Error: ${(apiErr as Error).message}.\n(Check Vercel Logs or Environment Variables)`
+            error: `API Error: ${errMsg}\n(Check Vercel Logs or Environment Variables)`
           });
         }
       } else {
@@ -152,7 +174,7 @@ export const SqlSimulator: React.FC = () => {
                 className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-all text-sm font-medium whitespace-nowrap shadow-[0_0_15px_rgba(59,130,246,0.2)]"
               >
                 {testLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
-                1. 연결 테스트 (Ping)
+                {testLoading ? '연결 시도 중...' : '1. 연결 테스트 (Ping)'}
               </button>
             )}
 
@@ -182,7 +204,7 @@ export const SqlSimulator: React.FC = () => {
                    <div className="text-sm text-slate-300 space-y-1">
                        <p className="font-semibold text-blue-300">실제 서버 연결 모드입니다.</p>
                        <p>1. 먼저 <strong>[연결 테스트]</strong> 버튼을 눌러 DB 접속이 되는지 확인하세요.</p>
-                       <p>2. 연결이 실패하면 Vercel 로그나 iptime 방화벽(포트포워딩 9876)을 확인해야 합니다.</p>
+                       <p>2. 버튼이 계속 로딩되면 <strong>방화벽 문제</strong>입니다. (타임아웃 10초)</p>
                        <p className="text-xs text-slate-500 mt-2">* 보안 경고: 실제 운영 DB에는 UPDATE/DELETE 쿼리를 주의해서 사용하세요.</p>
                    </div>
                 </div>
@@ -199,14 +221,14 @@ export const SqlSimulator: React.FC = () => {
                 {connectionStatus === 'success' ? <CheckCircle2 className="w-5 h-5 mt-0.5 flex-shrink-0" /> : <XCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />}
                 <div className="flex-1">
                     <strong className="block text-base mb-1">{connectionStatus === 'success' ? '연결 성공!' : '연결 실패'}</strong>
-                    <span className="whitespace-pre-wrap">{connectionMsg}</span>
+                    <span className="whitespace-pre-wrap font-mono text-xs opacity-90">{connectionMsg}</span>
                     {connectionStatus === 'error' && (
                         <div className="mt-3 p-2 bg-red-950/30 rounded border border-red-900/50 text-xs">
                             <p className="font-bold mb-1">💡 체크포인트:</p>
                             <ul className="list-disc list-inside space-y-1 opacity-80">
-                                <li>iptime 공유기에서 9876 포트가 포트포워딩 되었나요?</li>
-                                <li>서버 PC의 Windows 방화벽에서 인바운드 연결을 허용했나요?</li>
-                                <li>Vercel 환경변수(DB_PASSWORD 등)에 오타가 없나요?</li>
+                                <li>iptime 공유기 포트포워딩 (외부 9876 -&gt; 내부 1433) 확인</li>
+                                <li>SQL Server 구성 관리자 &gt; TCP/IP &gt; 사용(Enabled) 여부</li>
+                                <li>Windows 방화벽 &gt; 인바운드 규칙 &gt; 1433 포트 허용</li>
                             </ul>
                         </div>
                     )}
