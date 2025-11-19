@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileJson, Server, Terminal, CheckCircle2, Copy, AlertTriangle, Settings } from 'lucide-react';
+import { FileJson, Server, Terminal, CheckCircle2, Copy, AlertTriangle, Settings, FileCode } from 'lucide-react';
 
 export const DeploymentGuide: React.FC = () => {
   const [copied, setCopied] = useState<string | null>(null);
@@ -14,7 +14,7 @@ export const DeploymentGuide: React.FC = () => {
     <div className="mb-6 rounded-xl overflow-hidden border border-slate-700 bg-slate-900/50">
       <div className="flex items-center justify-between px-4 py-2 bg-slate-800 border-b border-slate-700">
         <span className="text-xs font-mono text-slate-300 flex items-center gap-2">
-          {language === 'json' ? <FileJson className="w-4 h-4 text-yellow-400" /> : <Server className="w-4 h-4 text-blue-400" />}
+          {language === 'json' ? <FileJson className="w-4 h-4 text-yellow-400" /> : <FileCode className="w-4 h-4 text-blue-400" />}
           {filename}
         </span>
         <button
@@ -40,7 +40,7 @@ export const DeploymentGuide: React.FC = () => {
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npx vite build",
+    "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -62,9 +62,31 @@ export const DeploymentGuide: React.FC = () => {
 
   const vercelJsonCode = `{
   "framework": null,
-  "installCommand": "npm install",
+  "installCommand": "npm install --no-audit --no-fund",
   "buildCommand": "npm run build",
   "outputDirectory": "dist"
+}`;
+
+  const tsconfigCode = `{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["./**/*.ts", "./**/*.tsx"],
+  "exclude": ["node_modules"]
 }`;
 
   const apiCode = `// api/query.js
@@ -77,7 +99,8 @@ const config = {
   port: parseInt(process.env.DB_PORT || '1433', 10),
   database: process.env.DB_DATABASE,
   options: {
-    // Azure는 true, 사설 서버(iptime 등)는 false 권장
+    // iptime 등 사설 서버 연결 시 반드시 false
+    // 환경변수 DB_ENCRYPT가 'true'일 때만 암호화 활성화
     encrypt: process.env.DB_ENCRYPT === 'true', 
     trustServerCertificate: true,
   },
@@ -103,43 +126,44 @@ export default async function handler(req, res) {
 
   try {
     const { query } = req.body;
+    // 연결 -> 쿼리 -> 연결해제 (Connection Pool)
     const pool = await sql.connect(config);
     const result = await pool.request().query(query);
     await pool.close();
     res.status(200).json({ data: result.recordset });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message, code: error.code });
   }
 }`;
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-fade-in pb-12">
       <div className="text-center space-y-2 mb-10">
-        <h2 className="text-3xl font-bold text-white">Vercel 배포 체크리스트 (Final Fix)</h2>
+        <h2 className="text-3xl font-bold text-white">Vercel 배포 최종 해결 가이드</h2>
         <p className="text-slate-400">
-          Vercel 빌드 에러를 해결하기 위해 <strong>npx</strong> 명령어를 사용하고 프레임워크 설정을 초기화합니다.
+          <code>vite: command not found</code> 에러를 해결하기 위해 <strong>npx 제거</strong> 및 <strong>tsconfig.json 추가</strong>를 수행합니다.
         </p>
       </div>
 
-      {/* Step 0: Database Setup */}
+      {/* Step 0: Database Info */}
       <section className="space-y-4">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-8 h-8 rounded-full bg-amber-600 flex items-center justify-center font-bold text-white">1</div>
-          <h3 className="text-xl font-semibold text-white">데이터베이스 정보 확인</h3>
+          <h3 className="text-xl font-semibold text-white">타겟 서버 정보 확인</h3>
         </div>
         
         <div className="bg-slate-900/80 border border-slate-700 rounded-xl p-6 ml-4">
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-slate-950 p-4 rounded-lg border border-slate-800">
-                <h4 className="text-slate-400 text-xs font-bold uppercase mb-3">타겟 서버 정보</h4>
+                <h4 className="text-slate-400 text-xs font-bold uppercase mb-3">연결 정보</h4>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between border-b border-slate-800 pb-2">
-                    <span className="text-slate-500">HOST</span>
+                    <span className="text-slate-500">HOST (DB_SERVER)</span>
                     <code className="text-blue-400">kjmartII.iptime.org</code>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">PORT</span>
+                    <span className="text-slate-500">PORT (DB_PORT)</span>
                     <code className="text-blue-400">9876</code>
                   </div>
                 </div>
@@ -147,8 +171,8 @@ export default async function handler(req, res) {
               <div className="flex items-center p-4 bg-amber-900/20 border border-amber-500/20 rounded-lg text-sm text-amber-200 leading-relaxed">
                  <AlertTriangle className="w-10 h-10 mr-3 text-amber-500 flex-shrink-0" />
                  <p>
-                   Vercel 서버 IP는 수시로 바뀝니다. <br/>
-                   공유기 및 방화벽에서 <strong>9876 포트에 대해 모든 IP 접속 허용</strong>이 되어 있어야 합니다.
+                   <strong>중요:</strong> Vercel 배포 후 Redeploy 시 반드시<br/>
+                   <span className="text-white font-bold underline">"Use existing build cache" 체크를 해제</span>해야 합니다.
                  </p>
               </div>
            </div>
@@ -159,31 +183,40 @@ export default async function handler(req, res) {
       <section className="space-y-4">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-white">2</div>
-          <h3 className="text-xl font-semibold text-white">필수 파일 생성 및 수정 (업데이트됨)</h3>
+          <h3 className="text-xl font-semibold text-white">파일 코드 복사 (덮어쓰기)</h3>
         </div>
         
         <div className="pl-4 border-l-2 border-slate-800 ml-4 space-y-6">
           <div>
             <p className="text-slate-300 mb-2 flex items-center gap-2">
-              <span className="bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded text-xs font-bold">필수 수정</span>
+              <span className="bg-red-500/20 text-red-300 px-2 py-0.5 rounded text-xs font-bold">수정 1</span>
               <code className="bg-slate-800 px-1.5 py-0.5 rounded text-yellow-400 text-sm">package.json</code>
-              <span className="text-xs text-slate-500 ml-2">(npx vite build로 변경)</span>
+              <span className="text-xs text-slate-500 ml-2">(npx 제거, vite build로 변경)</span>
             </p>
             <CodeBlock id="pkg" filename="package.json" code={packageJsonCode} language="json" />
           </div>
 
           <div>
             <p className="text-slate-300 mb-2 flex items-center gap-2">
-              <span className="bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded text-xs font-bold">필수 수정</span>
+              <span className="bg-red-500/20 text-red-300 px-2 py-0.5 rounded text-xs font-bold">수정 2</span>
               <code className="bg-slate-800 px-1.5 py-0.5 rounded text-white text-sm">vercel.json</code>
-              <span className="text-xs text-slate-500 ml-2">("framework": null 추가)</span>
+              <span className="text-xs text-slate-500 ml-2">(강제 재설치 옵션 추가)</span>
             </p>
             <CodeBlock id="vercel" filename="vercel.json" code={vercelJsonCode} language="json" />
           </div>
 
           <div>
+            <p className="text-slate-300 mb-2 flex items-center gap-2">
+              <span className="bg-green-500/20 text-green-300 px-2 py-0.5 rounded text-xs font-bold">신규 생성</span>
+              <code className="bg-slate-800 px-1.5 py-0.5 rounded text-yellow-400 text-sm">tsconfig.json</code>
+              <span className="text-xs text-slate-500 ml-2">(프로젝트 루트에 파일 생성)</span>
+            </p>
+            <CodeBlock id="ts" filename="tsconfig.json" code={tsconfigCode} language="json" />
+          </div>
+
+          <div>
             <p className="text-slate-300 mb-2">
-              <code className="bg-slate-800 px-1.5 py-0.5 rounded text-blue-400 text-sm">api/query.js</code> (이전과 동일)
+              <code className="bg-slate-800 px-1.5 py-0.5 rounded text-blue-400 text-sm">api/query.js</code> (서버 연결 로직)
             </p>
             <CodeBlock id="api" filename="api/query.js" code={apiCode} language="javascript" />
           </div>
@@ -209,7 +242,11 @@ export default async function handler(req, res) {
               </div>
                <div className="flex items-center justify-between bg-slate-900/50 p-3 rounded border border-slate-700/50">
                 <span className="font-mono text-slate-300 text-yellow-400">DB_ENCRYPT</span>
-                <span className="text-slate-500 text-xs">false (사설 서버는 필수)</span>
+                <span className="text-slate-500 text-xs">false</span>
+              </div>
+              <div className="flex items-center justify-between bg-slate-900/50 p-3 rounded border border-slate-700/50">
+                <span className="font-mono text-slate-300">DB_USER / DB_PASSWORD</span>
+                <span className="text-slate-500 text-xs">사용자 계정 정보 입력</span>
               </div>
             </div>
         </div>
