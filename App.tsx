@@ -7,7 +7,7 @@ import { Tab } from './types';
 import { Database, BookOpen, Terminal, Rocket } from 'lucide-react';
 
 const App: React.FC = () => {
-  // Start with SIMULATOR tab by default as requested
+  // Start with SIMULATOR tab by default
   const [activeTab, setActiveTab] = useState<Tab>(Tab.SIMULATOR);
 
   return (
@@ -76,9 +76,7 @@ const App: React.FC = () => {
               </p>
             </div>
 
-            {/* Step List (Vertical Timeline Layout) */}
             <div className="max-w-4xl mx-auto space-y-6 relative">
-               {/* Background line for larger screens */}
                <div className="absolute left-[2.75rem] top-6 bottom-6 w-0.5 bg-slate-800 hidden md:block -z-10" />
 
                {GUIDE_STEPS.map((step) => (

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Play, Database, Loader2, Sparkles, Code, Wifi, WifiOff, Activity, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
+import { Search, Play, Database, Loader2, Sparkles, Code, Wifi, WifiOff, Activity, CheckCircle2, XCircle, HelpCircle, Server } from 'lucide-react';
 import { MOCK_USERS } from '../constants';
 import { generateSqlFromNaturalLanguage } from '../services/geminiService';
 import { QueryResult } from '../types';
@@ -13,6 +13,7 @@ export const SqlSimulator: React.FC = () => {
   const [useRealApi, setUseRealApi] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [connectionMsg, setConnectionMsg] = useState('');
+  const [connectedDbName, setConnectedDbName] = useState<string>('');
 
   // Function to test connectivity
   const handleTestConnection = useCallback(async () => {
@@ -21,8 +22,9 @@ export const SqlSimulator: React.FC = () => {
     setTestLoading(true);
     setConnectionStatus('idle');
     setResult(null);
+    setConnectedDbName('');
 
-    // 타임아웃 15초로 연장 (두 번의 쿼리 실행 고려)
+    // 타임아웃 15초로 연장
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
@@ -48,25 +50,25 @@ export const SqlSimulator: React.FC = () => {
         const dbName = json.data[0].current_db || 'Unknown';
         const serverVersion = json.data[0].version.split('\n')[0].substring(0, 30);
         
-        setConnectionMsg(`✅ 연결 성공! (Target DB: ${dbName})\nServer: ${serverVersion}...`);
+        setConnectedDbName(dbName);
+        setConnectionMsg(`Server: ${serverVersion}...`);
         
-        // 2. 연결 성공 시 테이블 목록 조회 (winpos3의 테이블들)
+        // 2. 연결 성공 시 테이블 목록 조회
         const tableQuery = "SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME";
         const tableResponse = await fetch('/api/query', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query: tableQuery }),
-            signal: controller.signal // 동일한 타임아웃 시그널 사용
+            signal: controller.signal
         });
 
         if (tableResponse.ok) {
             const tableJson = await tableResponse.json();
             setResult({
                 sql: tableQuery,
-                data: tableJson.data // 테이블 목록 표시
+                data: tableJson.data
             });
         } else {
-            // 테이블 조회 실패 시 버전 정보만 표시
             setResult({
                 sql: testQuery,
                 data: json.data
@@ -81,7 +83,7 @@ export const SqlSimulator: React.FC = () => {
       setConnectionStatus('error');
       
       if (e.name === 'AbortError') {
-        setConnectionMsg('연결 시간 초과 (Timeout).\n서버가 응답하지 않습니다. 방화벽이 포트(9876)를 차단 중일 수 있습니다.');
+        setConnectionMsg('연결 시간 초과 (Timeout).\n서버가 응답하지 않습니다. 방화벽(9876 포트)을 확인하세요.');
       } else {
         setConnectionMsg(`Connection Failed: ${e.message}`);
       }
@@ -95,7 +97,7 @@ export const SqlSimulator: React.FC = () => {
     if (useRealApi) {
       handleTestConnection();
     }
-  }, []); // Run once on mount
+  }, []);
 
   const handleSimulate = async () => {
     if (!input.trim()) return;
@@ -104,13 +106,11 @@ export const SqlSimulator: React.FC = () => {
     setConnectionStatus('idle');
 
     try {
-      // 1. Get SQL from Gemini
       const sql = await generateSqlFromNaturalLanguage(input);
 
       if (useRealApi) {
-        // --- REAL API MODE ---
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15초 제한
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
 
         try {
           const response = await fetch('/api/query', {
@@ -140,32 +140,15 @@ export const SqlSimulator: React.FC = () => {
            setResult({
             sql,
             data: [],
-            error: `API Error: ${errMsg}\n(Check Vercel Logs or Environment Variables)`
+            error: `API Error: ${errMsg}`
           });
         }
       } else {
-        // --- MOCK SIMULATION MODE ---
+        // Mock mode
         await new Promise(resolve => setTimeout(resolve, 800));
-
         let filteredData = [...MOCK_USERS];
-        const lowerInput = input.toLowerCase();
-        
-        if (lowerInput.includes('top') || lowerInput.includes('limit')) {
-          filteredData = filteredData.slice(0, 2);
-        }
-        if (lowerInput.includes('admin')) {
-          filteredData = filteredData.filter(u => u.role === 'Admin');
-        }
-        if (lowerInput.includes('lee') || lowerInput.includes('younghee')) {
-          filteredData = filteredData.filter(u => u.name.includes('Lee') || u.name.includes('이영희'));
-        }
-
-        setResult({
-          sql,
-          data: filteredData,
-        });
+        setResult({ sql, data: filteredData });
       }
-
     } catch (err) {
       setResult({
         sql: '-- Error generating SQL',
@@ -186,23 +169,27 @@ export const SqlSimulator: React.FC = () => {
               <Sparkles className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-xl font-semibold text-white">AI SQL Query Simulator</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-xl font-semibold text-white">AI SQL Query Simulator</h3>
+                <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-xs font-mono border border-blue-500/30 animate-pulse">
+                    v2.1 (Live)
+                </span>
+              </div>
               <p className="text-slate-400 mt-1 text-sm">
                 자연어를 SQL로 변환하여 실행합니다.
               </p>
             </div>
           </div>
 
-          {/* Controls */}
           <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
             {useRealApi && (
               <button
                 onClick={handleTestConnection}
                 disabled={testLoading}
-                className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-all text-sm font-medium whitespace-nowrap shadow-[0_0_15px_rgba(59,130,246,0.2)]"
+                className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-all text-sm font-medium whitespace-nowrap"
               >
                 {testLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
-                {testLoading ? '연결 및 테이블 조회 중...' : '1. 연결 테스트 (Check DB)'}
+                {testLoading ? '접속 중...' : '재연결 테스트'}
               </button>
             )}
 
@@ -224,41 +211,37 @@ export const SqlSimulator: React.FC = () => {
           </div>
         </div>
 
-        {/* Real API Info Box */}
-        {useRealApi && (
-            <div className="mb-6 bg-slate-900/50 border border-slate-700 rounded-lg p-4 animate-fade-in">
-                <div className="flex items-start gap-3">
-                   <HelpCircle className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
-                   <div className="text-sm text-slate-300 space-y-1">
-                       <p className="font-semibold text-blue-300">실제 서버(winpos3) 자동 연결 모드입니다.</p>
-                       <p>1. 앱 시작 시 자동으로 <strong>연결 및 테이블 조회</strong>를 시도합니다.</p>
-                       <p>2. 실패 시 <strong>방화벽</strong> 및 <strong>공유기 설정(9876 포트)</strong>을 확인해주세요.</p>
-                   </div>
+        {/* Connection Status Big Banner */}
+        {useRealApi && connectionStatus === 'success' && (
+            <div className="mb-6 bg-green-900/20 border border-green-500/50 rounded-lg p-4 flex items-center gap-4 animate-fade-in">
+                <div className="p-3 bg-green-500/20 rounded-full text-green-400">
+                    <Server className="w-6 h-6" />
+                </div>
+                <div>
+                    <h4 className="text-green-300 font-bold text-lg flex items-center gap-2">
+                        Connected to: <span className="text-white underline underline-offset-4">{connectedDbName}</span>
+                    </h4>
+                    <p className="text-green-400/70 text-xs font-mono mt-1">{connectionMsg}</p>
                 </div>
             </div>
         )}
 
-        {/* Connection Status Message */}
-        {useRealApi && connectionStatus !== 'idle' && (
-            <div className={`mb-4 p-4 rounded-lg text-sm flex items-start gap-3 animate-fade-in border ${
-                connectionStatus === 'success' 
-                ? 'bg-green-500/10 text-green-300 border-green-500/30' 
-                : 'bg-red-500/10 text-red-300 border-red-500/30'
-            }`}>
-                {connectionStatus === 'success' ? <CheckCircle2 className="w-5 h-5 mt-0.5 flex-shrink-0" /> : <XCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />}
-                <div className="flex-1">
-                    <strong className="block text-base mb-1">{connectionStatus === 'success' ? '연결 성공!' : '연결 실패'}</strong>
-                    <span className="whitespace-pre-wrap font-mono text-xs opacity-90">{connectionMsg}</span>
-                    {connectionStatus === 'error' && (
-                        <div className="mt-3 p-2 bg-red-950/30 rounded border border-red-900/50 text-xs">
-                            <p className="font-bold mb-1">💡 체크포인트:</p>
-                            <ul className="list-disc list-inside space-y-1 opacity-80">
-                                <li>iptime 공유기 포트포워딩 (외부 9876 -&gt; 내부 1433) 확인</li>
-                                <li>SQL Server 구성 관리자 &gt; TCP/IP &gt; 사용(Enabled) 여부</li>
-                            </ul>
-                        </div>
-                    )}
+        {useRealApi && connectionStatus === 'error' && (
+             <div className="mb-6 bg-red-900/20 border border-red-500/50 rounded-lg p-4 flex items-start gap-4 animate-fade-in">
+                <XCircle className="w-6 h-6 text-red-500 mt-1 flex-shrink-0" />
+                <div>
+                    <h4 className="text-red-300 font-bold">연결 실패</h4>
+                    <p className="text-red-200/70 text-sm mt-1 whitespace-pre-wrap">{connectionMsg}</p>
+                    <div className="mt-2 text-xs text-red-400/60">
+                        * Vercel 환경변수(DB_NAME, DB_PORT)와 방화벽 설정을 확인해주세요.
+                    </div>
                 </div>
+            </div>
+        )}
+        
+        {useRealApi && connectionStatus === 'idle' && !testLoading && (
+            <div className="mb-6 text-center py-4 border border-dashed border-slate-700 rounded-lg text-slate-500 text-sm">
+                대기 중... (자동 연결 시도됨)
             </div>
         )}
 
@@ -268,7 +251,7 @@ export const SqlSimulator: React.FC = () => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSimulate()}
-            placeholder={useRealApi ? "실제 DB 쿼리 요청 (예: select * from [테이블명] where ...)" : "예: '관리자(Admin) 권한을 가진 사용자 보여줘'"}
+            placeholder={useRealApi ? `[${connectedDbName || 'DB'}]에 쿼리 요청 (예: 모든 테이블 보여줘)` : "예: '관리자(Admin) 권한을 가진 사용자 보여줘'"}
             className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg py-4 pl-12 pr-24 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
           />
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 w-5 h-5" />
@@ -281,54 +264,35 @@ export const SqlSimulator: React.FC = () => {
             실행
           </button>
         </div>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          <span className="text-xs text-slate-500 font-mono mt-1">Try:</span>
-          {['현재 DB 테이블 목록 다시 조회', '특정 테이블 상위 5개 조회'].map(prompt => (
-            <button 
-              key={prompt}
-              onClick={() => setInput(prompt)}
-              className="text-xs bg-slate-800 text-slate-300 px-2 py-1 rounded hover:bg-slate-700 border border-slate-700 transition-colors"
-            >
-              {prompt}
-            </button>
-          ))}
-        </div>
       </div>
 
       {result && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
-          {/* Generated SQL View */}
           <div className="bg-slate-900 rounded-xl border border-slate-700 overflow-hidden flex flex-col">
             <div className="bg-slate-800 px-4 py-3 border-b border-slate-700 flex items-center gap-2">
               <Code className="w-4 h-4 text-green-400" />
-              <span className="text-sm font-mono text-slate-300">Generated T-SQL Query</span>
+              <span className="text-sm font-mono text-slate-300">Generated T-SQL</span>
             </div>
             <div className="p-4 font-mono text-sm text-green-300 overflow-auto flex-1 whitespace-pre-wrap">
               {result.sql}
             </div>
-            <div className="bg-slate-950/50 px-4 py-2 border-t border-slate-800 text-xs text-slate-500 flex justify-between">
-               <span>Generated by Gemini 2.5 Flash</span>
-               <span>{useRealApi ? 'Target: Real API' : 'Target: Mock Data'}</span>
-            </div>
           </div>
 
-          {/* Result Table */}
           <div className="bg-slate-900 rounded-xl border border-slate-700 overflow-hidden flex flex-col">
             <div className="bg-slate-800 px-4 py-3 border-b border-slate-700 flex items-center gap-2">
               <Database className="w-4 h-4 text-blue-400" />
               <span className="text-sm font-mono text-slate-300">
-                {result.error ? 'Error' : (connectionStatus === 'success' && result.sql.includes('INFORMATION_SCHEMA') ? 'Table List (Winpos3)' : 'Result Set')}
+                {result.error ? 'Error' : `Result Data (${result.data.length} rows)`}
               </span>
             </div>
-            <div className="p-0 overflow-auto flex-1 min-h-[200px]">
+            <div className="p-0 overflow-auto flex-1 min-h-[200px] max-h-[500px]">
               {result.error ? (
                 <div className="p-6 text-red-400 text-sm font-mono whitespace-pre-wrap">
                   {result.error}
                 </div>
               ) : (
                 <table className="w-full text-left text-sm text-slate-400">
-                  <thead className="bg-slate-950 text-slate-200 uppercase font-medium">
+                  <thead className="bg-slate-950 text-slate-200 uppercase font-medium sticky top-0">
                     <tr>
                       {result.data.length > 0 ? Object.keys(result.data[0]).map(key => (
                         <th key={key} className="px-4 py-3 whitespace-nowrap">{key}</th>
@@ -341,14 +305,14 @@ export const SqlSimulator: React.FC = () => {
                     {result.data.length > 0 ? result.data.map((row, idx) => (
                       <tr key={idx} className="hover:bg-slate-800/50 transition-colors">
                         {Object.values(row).map((val, vIdx) => (
-                          <td key={vIdx} className="px-4 py-3 max-w-xs truncate">
-                             {val === null ? 'NULL' : (typeof val === 'object' ? JSON.stringify(val) : val?.toString())}
+                          <td key={vIdx} className="px-4 py-3 max-w-xs truncate border-r border-slate-800/50 last:border-0">
+                             {val === null ? <span className="text-slate-600 italic">NULL</span> : (typeof val === 'object' ? JSON.stringify(val) : val?.toString())}
                           </td>
                         ))}
                       </tr>
                     )) : (
                       <tr>
-                        <td colSpan={5} className="px-4 py-8 text-center text-slate-500">
+                        <td colSpan={5} className="px-4 py-12 text-center text-slate-500">
                           데이터가 없습니다.
                         </td>
                       </tr>
