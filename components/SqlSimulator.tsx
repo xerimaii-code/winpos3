@@ -27,7 +27,8 @@ export const SqlSimulator: React.FC = () => {
     const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     try {
-      const testQuery = "SELECT @@VERSION as version";
+      // 변경: 현재 DB 이름을 함께 조회하는 쿼리
+      const testQuery = "SELECT @@VERSION as version, DB_NAME() as current_db";
       const response = await fetch('/api/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -45,9 +46,12 @@ export const SqlSimulator: React.FC = () => {
       const json = await response.json();
       if (json.data && json.data.length > 0) {
         setConnectionStatus('success');
-        // DB 이름은 하드코딩하지 않고 일반적인 성공 메시지로 표시
-        const serverVersion = json.data[0].version.split('\n')[0].substring(0, 40);
-        setConnectionMsg(`연결 성공! Server: ${serverVersion}...`);
+        
+        const dbName = json.data[0].current_db || 'Unknown';
+        const serverVersion = json.data[0].version.split('\n')[0].substring(0, 30);
+        
+        // 사용자에게 현재 접속된 DB 이름을 명확히 표시
+        setConnectionMsg(`✅ 연결 성공! (Target DB: ${dbName})\nServer: ${serverVersion}...`);
         setResult({
             sql: testQuery,
             data: json.data
@@ -180,7 +184,7 @@ export const SqlSimulator: React.FC = () => {
                 className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-all text-sm font-medium whitespace-nowrap shadow-[0_0_15px_rgba(59,130,246,0.2)]"
               >
                 {testLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
-                {testLoading ? '연결 시도 중...' : '1. 연결 테스트 (Ping)'}
+                {testLoading ? '연결 시도 중...' : '1. 연결 테스트 (Check DB)'}
               </button>
             )}
 
@@ -264,7 +268,7 @@ export const SqlSimulator: React.FC = () => {
 
         <div className="mt-4 flex flex-wrap gap-2">
           <span className="text-xs text-slate-500 font-mono mt-1">Try:</span>
-          {['현재 DB 버전 확인', '모든 사용자 보여줘', '최근 2명만 보여줘'].map(prompt => (
+          {['현재 DB 버전 및 이름 확인', '모든 사용자 보여줘', '최근 2명만 보여줘'].map(prompt => (
             <button 
               key={prompt}
               onClick={() => setInput(prompt)}
