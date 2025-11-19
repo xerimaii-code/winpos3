@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Play, Database, Loader2, Sparkles, Code, Wifi, WifiOff, Activity, CheckCircle2, XCircle } from 'lucide-react';
+import { Search, Play, Database, Loader2, Sparkles, Code, Wifi, WifiOff, Activity, CheckCircle2, XCircle, AlertTriangle, HelpCircle } from 'lucide-react';
 import { MOCK_USERS } from '../constants';
 import { generateSqlFromNaturalLanguage } from '../services/geminiService';
 import { QueryResult } from '../types';
@@ -41,7 +41,7 @@ export const SqlSimulator: React.FC = () => {
       const json = await response.json();
       if (json.data && json.data.length > 0) {
         setConnectionStatus('success');
-        setConnectionMsg(`Connected! Server: ${json.data[0].version.substring(0, 40)}...`);
+        setConnectionMsg(`연결 성공! (Server: ${json.data[0].version.split('\n')[0].substring(0, 30)}...)`);
         setResult({
             sql: testQuery,
             data: json.data
@@ -149,18 +149,22 @@ export const SqlSimulator: React.FC = () => {
               <button
                 onClick={handleTestConnection}
                 disabled={testLoading}
-                className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-all text-sm font-medium whitespace-nowrap"
+                className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-all text-sm font-medium whitespace-nowrap shadow-[0_0_15px_rgba(59,130,246,0.2)]"
               >
                 {testLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
-                연결 테스트 (Ping)
+                1. 연결 테스트 (Ping)
               </button>
             )}
 
             <button
-              onClick={() => setUseRealApi(!useRealApi)}
+              onClick={() => {
+                  setUseRealApi(!useRealApi);
+                  setResult(null);
+                  setConnectionStatus('idle');
+              }}
               className={`flex items-center justify-center gap-3 px-4 py-2 rounded-lg border transition-all duration-300 text-sm font-medium ${
                 useRealApi 
-                  ? 'bg-green-500/10 border-green-500/30 text-green-400' 
+                  ? 'bg-green-600 text-white border-green-500 shadow-lg shadow-green-500/20' 
                   : 'bg-slate-900 border-slate-700 text-slate-400 hover:bg-slate-800'
               }`}
             >
@@ -170,13 +174,43 @@ export const SqlSimulator: React.FC = () => {
           </div>
         </div>
 
+        {/* Real API Info Box */}
+        {useRealApi && (
+            <div className="mb-6 bg-slate-900/50 border border-slate-700 rounded-lg p-4 animate-fade-in">
+                <div className="flex items-start gap-3">
+                   <HelpCircle className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
+                   <div className="text-sm text-slate-300 space-y-1">
+                       <p className="font-semibold text-blue-300">실제 서버 연결 모드입니다.</p>
+                       <p>1. 먼저 <strong>[연결 테스트]</strong> 버튼을 눌러 DB 접속이 되는지 확인하세요.</p>
+                       <p>2. 연결이 실패하면 Vercel 로그나 iptime 방화벽(포트포워딩 9876)을 확인해야 합니다.</p>
+                       <p className="text-xs text-slate-500 mt-2">* 보안 경고: 실제 운영 DB에는 UPDATE/DELETE 쿼리를 주의해서 사용하세요.</p>
+                   </div>
+                </div>
+            </div>
+        )}
+
         {/* Connection Status Message */}
         {useRealApi && connectionStatus !== 'idle' && (
-            <div className={`mb-4 p-3 rounded-lg text-sm flex items-center gap-2 ${
-                connectionStatus === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
+            <div className={`mb-4 p-4 rounded-lg text-sm flex items-start gap-3 animate-fade-in border ${
+                connectionStatus === 'success' 
+                ? 'bg-green-500/10 text-green-300 border-green-500/30' 
+                : 'bg-red-500/10 text-red-300 border-red-500/30'
             }`}>
-                {connectionStatus === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                <span className="truncate">{connectionMsg}</span>
+                {connectionStatus === 'success' ? <CheckCircle2 className="w-5 h-5 mt-0.5 flex-shrink-0" /> : <XCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />}
+                <div className="flex-1">
+                    <strong className="block text-base mb-1">{connectionStatus === 'success' ? '연결 성공!' : '연결 실패'}</strong>
+                    <span className="whitespace-pre-wrap">{connectionMsg}</span>
+                    {connectionStatus === 'error' && (
+                        <div className="mt-3 p-2 bg-red-950/30 rounded border border-red-900/50 text-xs">
+                            <p className="font-bold mb-1">💡 체크포인트:</p>
+                            <ul className="list-disc list-inside space-y-1 opacity-80">
+                                <li>iptime 공유기에서 9876 포트가 포트포워딩 되었나요?</li>
+                                <li>서버 PC의 Windows 방화벽에서 인바운드 연결을 허용했나요?</li>
+                                <li>Vercel 환경변수(DB_PASSWORD 등)에 오타가 없나요?</li>
+                            </ul>
+                        </div>
+                    )}
+                </div>
             </div>
         )}
 
@@ -186,7 +220,7 @@ export const SqlSimulator: React.FC = () => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSimulate()}
-            placeholder={useRealApi ? "실제 DB 테이블명으로 검색하세요 (예: select * from users)" : "예: '관리자(Admin) 권한을 가진 사용자 보여줘'"}
+            placeholder={useRealApi ? "실제 DB 쿼리 요청 (예: select * from users where id > 10)" : "예: '관리자(Admin) 권한을 가진 사용자 보여줘'"}
             className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg py-4 pl-12 pr-24 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
           />
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 w-5 h-5" />
@@ -260,7 +294,7 @@ export const SqlSimulator: React.FC = () => {
                       <tr key={idx} className="hover:bg-slate-800/50 transition-colors">
                         {Object.values(row).map((val, vIdx) => (
                           <td key={vIdx} className="px-4 py-3 max-w-xs truncate">
-                             {val === null ? 'NULL' : val?.toString()}
+                             {val === null ? 'NULL' : (typeof val === 'object' ? JSON.stringify(val) : val?.toString())}
                           </td>
                         ))}
                       </tr>
