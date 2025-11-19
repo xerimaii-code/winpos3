@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Play, Database, Loader2, Sparkles, Code, Wifi, WifiOff, Activity, CheckCircle2, XCircle, AlertTriangle, HelpCircle } from 'lucide-react';
+import { Search, Play, Database, Loader2, Sparkles, Code, Wifi, WifiOff, Activity, CheckCircle2, XCircle, HelpCircle } from 'lucide-react';
 import { MOCK_USERS } from '../constants';
 import { generateSqlFromNaturalLanguage } from '../services/geminiService';
 import { QueryResult } from '../types';
@@ -22,12 +22,12 @@ export const SqlSimulator: React.FC = () => {
     setConnectionStatus('idle');
     setResult(null);
 
-    // 10초 타임아웃 설정
+    // 타임아웃 15초로 연장 (두 번의 쿼리 실행 고려)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     try {
-      // 변경: 현재 DB 이름을 함께 조회하는 쿼리
+      // 1. 연결 및 DB 이름 확인 쿼리
       const testQuery = "SELECT @@VERSION as version, DB_NAME() as current_db";
       const response = await fetch('/api/query', {
         method: 'POST',
@@ -35,8 +35,6 @@ export const SqlSimulator: React.FC = () => {
         body: JSON.stringify({ query: testQuery }),
         signal: controller.signal
       });
-
-      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -50,20 +48,40 @@ export const SqlSimulator: React.FC = () => {
         const dbName = json.data[0].current_db || 'Unknown';
         const serverVersion = json.data[0].version.split('\n')[0].substring(0, 30);
         
-        // 사용자에게 현재 접속된 DB 이름을 명확히 표시
         setConnectionMsg(`✅ 연결 성공! (Target DB: ${dbName})\nServer: ${serverVersion}...`);
-        setResult({
-            sql: testQuery,
-            data: json.data
+        
+        // 2. 연결 성공 시 테이블 목록 조회 (winpos3의 테이블들)
+        const tableQuery = "SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME";
+        const tableResponse = await fetch('/api/query', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: tableQuery }),
+            signal: controller.signal // 동일한 타임아웃 시그널 사용
         });
+
+        if (tableResponse.ok) {
+            const tableJson = await tableResponse.json();
+            setResult({
+                sql: tableQuery,
+                data: tableJson.data // 테이블 목록 표시
+            });
+        } else {
+            // 테이블 조회 실패 시 버전 정보만 표시
+            setResult({
+                sql: testQuery,
+                data: json.data
+            });
+        }
       } else {
         throw new Error("No data returned from DB");
       }
+      
+      clearTimeout(timeoutId);
     } catch (e: any) {
       setConnectionStatus('error');
       
       if (e.name === 'AbortError') {
-        setConnectionMsg('연결 시간 초과 (Timeout, 10s).\n서버가 응답하지 않습니다. 방화벽이 포트(9876)를 차단 중일 수 있습니다.');
+        setConnectionMsg('연결 시간 초과 (Timeout).\n서버가 응답하지 않습니다. 방화벽이 포트(9876)를 차단 중일 수 있습니다.');
       } else {
         setConnectionMsg(`Connection Failed: ${e.message}`);
       }
@@ -92,7 +110,7 @@ export const SqlSimulator: React.FC = () => {
       if (useRealApi) {
         // --- REAL API MODE ---
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10초 제한
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15초 제한
 
         try {
           const response = await fetch('/api/query', {
@@ -117,7 +135,7 @@ export const SqlSimulator: React.FC = () => {
         } catch (apiErr: any) {
            let errMsg = apiErr.message;
            if (apiErr.name === 'AbortError') {
-             errMsg = 'Request Timed Out (10s). Check network/firewall.';
+             errMsg = 'Request Timed Out (15s). Check network/firewall.';
            }
            setResult({
             sql,
@@ -184,7 +202,7 @@ export const SqlSimulator: React.FC = () => {
                 className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-all text-sm font-medium whitespace-nowrap shadow-[0_0_15px_rgba(59,130,246,0.2)]"
               >
                 {testLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
-                {testLoading ? '연결 시도 중...' : '1. 연결 테스트 (Check DB)'}
+                {testLoading ? '연결 및 테이블 조회 중...' : '1. 연결 테스트 (Check DB)'}
               </button>
             )}
 
@@ -213,9 +231,8 @@ export const SqlSimulator: React.FC = () => {
                    <HelpCircle className="w-5 h-5 text-blue-400 mt-0.5 flex-shrink-0" />
                    <div className="text-sm text-slate-300 space-y-1">
                        <p className="font-semibold text-blue-300">실제 서버(winpos3) 자동 연결 모드입니다.</p>
-                       <p>1. 앱 시작 시 자동으로 <strong>연결 테스트</strong>를 시도합니다.</p>
+                       <p>1. 앱 시작 시 자동으로 <strong>연결 및 테이블 조회</strong>를 시도합니다.</p>
                        <p>2. 실패 시 <strong>방화벽</strong> 및 <strong>공유기 설정(9876 포트)</strong>을 확인해주세요.</p>
-                       <p className="text-xs text-slate-500 mt-2">* 보안 경고: 실제 운영 DB에는 UPDATE/DELETE 쿼리를 주의해서 사용하세요.</p>
                    </div>
                 </div>
             </div>
@@ -238,7 +255,6 @@ export const SqlSimulator: React.FC = () => {
                             <ul className="list-disc list-inside space-y-1 opacity-80">
                                 <li>iptime 공유기 포트포워딩 (외부 9876 -&gt; 내부 1433) 확인</li>
                                 <li>SQL Server 구성 관리자 &gt; TCP/IP &gt; 사용(Enabled) 여부</li>
-                                <li>Windows 방화벽 &gt; 인바운드 규칙 &gt; 1433 포트 허용</li>
                             </ul>
                         </div>
                     )}
@@ -252,7 +268,7 @@ export const SqlSimulator: React.FC = () => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSimulate()}
-            placeholder={useRealApi ? "실제 DB 쿼리 요청 (예: select * from POS_MST where id > 10)" : "예: '관리자(Admin) 권한을 가진 사용자 보여줘'"}
+            placeholder={useRealApi ? "실제 DB 쿼리 요청 (예: select * from [테이블명] where ...)" : "예: '관리자(Admin) 권한을 가진 사용자 보여줘'"}
             className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg py-4 pl-12 pr-24 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
           />
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 w-5 h-5" />
@@ -268,7 +284,7 @@ export const SqlSimulator: React.FC = () => {
 
         <div className="mt-4 flex flex-wrap gap-2">
           <span className="text-xs text-slate-500 font-mono mt-1">Try:</span>
-          {['현재 DB 버전 및 이름 확인', '모든 사용자 보여줘', '최근 2명만 보여줘'].map(prompt => (
+          {['현재 DB 테이블 목록 다시 조회', '특정 테이블 상위 5개 조회'].map(prompt => (
             <button 
               key={prompt}
               onClick={() => setInput(prompt)}
@@ -302,7 +318,7 @@ export const SqlSimulator: React.FC = () => {
             <div className="bg-slate-800 px-4 py-3 border-b border-slate-700 flex items-center gap-2">
               <Database className="w-4 h-4 text-blue-400" />
               <span className="text-sm font-mono text-slate-300">
-                {result.error ? 'Error' : 'Result Set'}
+                {result.error ? 'Error' : (connectionStatus === 'success' && result.sql.includes('INFORMATION_SCHEMA') ? 'Table List (Winpos3)' : 'Result Set')}
               </span>
             </div>
             <div className="p-0 overflow-auto flex-1 min-h-[200px]">
