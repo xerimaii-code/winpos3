@@ -20,7 +20,7 @@ const App: React.FC = () => {
               <Database className="w-6 h-6 text-white" />
             </div>
             <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-              MS SQL Connector Guide
+              MS SQL Connector (v3.0)
             </h1>
           </div>
           

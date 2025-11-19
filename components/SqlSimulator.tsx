@@ -171,12 +171,13 @@ export const SqlSimulator: React.FC = () => {
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-xl font-semibold text-white">AI SQL Query Simulator</h3>
-                <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-xs font-mono border border-blue-500/30 animate-pulse">
-                    v2.1 (Live)
+                {/* Version Badge - Red for high visibility to confirm deployment update */}
+                <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 text-xs font-bold border border-red-500/40 animate-pulse">
+                    v3.0 (Updated)
                 </span>
               </div>
               <p className="text-slate-400 mt-1 text-sm">
-                자연어를 SQL로 변환하여 실행합니다.
+                자연어를 SQL로 변환하여 실행합니다. (Winpos3 접속)
               </p>
             </div>
           </div>
