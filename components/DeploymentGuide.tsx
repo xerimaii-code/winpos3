@@ -40,7 +40,7 @@ export const DeploymentGuide: React.FC = () => {
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "npx vite build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -61,7 +61,7 @@ export const DeploymentGuide: React.FC = () => {
 }`;
 
   const vercelJsonCode = `{
-  "framework": "vite",
+  "framework": null,
   "installCommand": "npm install",
   "buildCommand": "npm run build",
   "outputDirectory": "dist"
@@ -116,9 +116,9 @@ export default async function handler(req, res) {
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-fade-in pb-12">
       <div className="text-center space-y-2 mb-10">
-        <h2 className="text-3xl font-bold text-white">Vercel 배포 체크리스트</h2>
+        <h2 className="text-3xl font-bold text-white">Vercel 배포 체크리스트 (Final Fix)</h2>
         <p className="text-slate-400">
-          빌드 오류를 방지하고 iptime 서버와 연결하기 위한 설정 파일들을 생성합니다.
+          Vercel 빌드 에러를 해결하기 위해 <strong>npx</strong> 명령어를 사용하고 프레임워크 설정을 초기화합니다.
         </p>
       </div>
 
@@ -159,31 +159,31 @@ export default async function handler(req, res) {
       <section className="space-y-4">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-white">2</div>
-          <h3 className="text-xl font-semibold text-white">필수 파일 생성 및 수정</h3>
+          <h3 className="text-xl font-semibold text-white">필수 파일 생성 및 수정 (업데이트됨)</h3>
         </div>
         
         <div className="pl-4 border-l-2 border-slate-800 ml-4 space-y-6">
           <div>
             <p className="text-slate-300 mb-2 flex items-center gap-2">
-              <span className="bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded text-xs font-bold">필수</span>
-              <code className="bg-slate-800 px-1.5 py-0.5 rounded text-yellow-400 text-sm">package.json</code> 교체
-              <span className="text-xs text-slate-500 ml-2">(tsc 제거 및 의존성 통합)</span>
+              <span className="bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded text-xs font-bold">필수 수정</span>
+              <code className="bg-slate-800 px-1.5 py-0.5 rounded text-yellow-400 text-sm">package.json</code>
+              <span className="text-xs text-slate-500 ml-2">(npx vite build로 변경)</span>
             </p>
             <CodeBlock id="pkg" filename="package.json" code={packageJsonCode} language="json" />
           </div>
 
           <div>
             <p className="text-slate-300 mb-2 flex items-center gap-2">
-              <span className="bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded text-xs font-bold">NEW</span>
-              <code className="bg-slate-800 px-1.5 py-0.5 rounded text-white text-sm">vercel.json</code> 생성
-              <span className="text-xs text-slate-500 ml-2">(빌드 방식 강제 지정)</span>
+              <span className="bg-yellow-500/20 text-yellow-300 px-2 py-0.5 rounded text-xs font-bold">필수 수정</span>
+              <code className="bg-slate-800 px-1.5 py-0.5 rounded text-white text-sm">vercel.json</code>
+              <span className="text-xs text-slate-500 ml-2">("framework": null 추가)</span>
             </p>
             <CodeBlock id="vercel" filename="vercel.json" code={vercelJsonCode} language="json" />
           </div>
 
           <div>
             <p className="text-slate-300 mb-2">
-              <code className="bg-slate-800 px-1.5 py-0.5 rounded text-blue-400 text-sm">api/query.js</code> 확인
+              <code className="bg-slate-800 px-1.5 py-0.5 rounded text-blue-400 text-sm">api/query.js</code> (이전과 동일)
             </p>
             <CodeBlock id="api" filename="api/query.js" code={apiCode} language="javascript" />
           </div>
@@ -194,7 +194,7 @@ export default async function handler(req, res) {
       <section className="space-y-4">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center font-bold text-white">3</div>
-          <h3 className="text-xl font-semibold text-white">Vercel 환경변수 확인</h3>
+          <h3 className="text-xl font-semibold text-white">Vercel 환경변수 설정</h3>
         </div>
         
         <div className="bg-purple-900/20 border border-purple-500/30 rounded-xl p-6 ml-4">
@@ -213,28 +213,6 @@ export default async function handler(req, res) {
               </div>
             </div>
         </div>
-      </section>
-
-      {/* Troubleshooting */}
-      <section className="space-y-4 mt-8">
-         <div className="bg-red-900/20 border border-red-500/30 rounded-xl p-6">
-            <h3 className="text-red-400 font-bold flex items-center gap-2 mb-3">
-               <AlertTriangle className="w-5 h-5" />
-               빌드 에러가 계속 발생한다면? (Troubleshooting)
-            </h3>
-            <p className="text-slate-300 text-sm mb-4">
-               'command not found' 에러는 주로 <code>package-lock.json</code>이 꼬여서 발생합니다.
-               Vercel은 이 파일을 매우 엄격하게 따릅니다.
-            </p>
-            <div className="bg-black/50 p-4 rounded font-mono text-sm text-green-400 space-y-2">
-               <p># 1. 로컬에서 lock 파일 삭제</p>
-               <p className="text-slate-400">rm package-lock.json</p>
-               <p># 2. 변경사항 커밋 및 푸시</p>
-               <p className="text-slate-400">git add .</p>
-               <p className="text-slate-400">git commit -m "Update build config & Remove lockfile"</p>
-               <p className="text-slate-400">git push</p>
-            </div>
-         </div>
       </section>
     </div>
   );
