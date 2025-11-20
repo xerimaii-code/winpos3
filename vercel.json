@@ -1,6 +1,8 @@
 {
-  "framework": null,
-  "installCommand": "npm install --no-audit --no-fund --force",
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist"
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
 }

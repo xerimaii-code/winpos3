@@ -48,7 +48,9 @@ export const DeploymentGuide: React.FC = () => {
     "react-dom": "^18.2.0",
     "lucide-react": "^0.344.0",
     "@google/genai": "^1.30.0",
-    "mssql": "^10.0.1",
+    "mssql": "^10.0.1"
+  },
+  "devDependencies": {
     "@types/react": "^18.2.64",
     "@types/react-dom": "^18.2.21",
     "@vitejs/plugin-react": "^4.2.1",
@@ -61,10 +63,12 @@ export const DeploymentGuide: React.FC = () => {
 }`;
 
   const vercelJsonCode = `{
-  "framework": null,
-  "installCommand": "npm install --no-audit --no-fund",
-  "buildCommand": "npm run build",
-  "outputDirectory": "dist"
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
 }`;
 
   const tsconfigCode = `{
@@ -137,14 +141,19 @@ export default async function handler(req, res) {
     const result = await pool.request().query(query);
     await pool.close();
     
-    res.status(200).json({ data: result.recordset });
+    // apiVersion 필드 추가 (배포 버전 확인용 v5.0)
+    res.status(200).json({ 
+      data: result.recordset,
+      apiVersion: 'v5.0 (Backend Updated)'
+    });
     
   } catch (error) {
     console.error('Database Error Details:', error);
     res.status(500).json({ 
       error: 'Database Error', 
       details: error.message, 
-      code: error.code
+      code: error.code,
+      apiVersion: 'v5.0 (Backend Updated)'
     });
   }
 }`;

@@ -24,8 +24,8 @@ const App: React.FC = () => {
                 MS SQL Connector
               </h1>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-mono text-emerald-400 bg-emerald-900/30 px-1.5 py-0.5 rounded border border-emerald-800">
-                  Frontend v4.0
+                <span className="text-xs font-mono text-white bg-emerald-600/80 px-2 py-0.5 rounded border border-emerald-500 shadow-sm">
+                  Frontend v5.0
                 </span>
               </div>
             </div>
