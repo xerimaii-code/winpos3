@@ -4,7 +4,7 @@ import { Search, Database, Loader2, Code, Activity, XCircle, Settings, ChevronDo
 import { generateSqlFromNaturalLanguage, analyzeQueryResult } from '../services/geminiService';
 import { QueryResult } from '../types';
 import { SettingsModal } from './SettingsModal';
-import { getKnowledge, saveQueryHistory } from '../utils/db';
+import { getKnowledge, saveQueryHistory, getGitConfig, saveKnowledge } from '../utils/db';
 import { QueryHistoryModal } from './QueryHistoryModal';
 import { MOCK_USERS } from '../constants';
 
@@ -26,14 +26,36 @@ export const SqlSimulator: React.FC = () => {
 
   const [showSql, setShowSql] = useState(false);
 
-  const loadKnowledge = useCallback(async () => {
+  const initializeKnowledge = useCallback(async () => {
+    const gitConfig = await getGitConfig();
+    if (gitConfig && gitConfig.gistId) {
+      try {
+        const response = await fetch(`https://api.github.com/gists/${gitConfig.gistId}`);
+        if (response.ok) {
+          const data = await response.json();
+          const filename = Object.keys(data.files)[0];
+          if (filename) {
+            const content = data.files[filename].content;
+            await saveKnowledge(content); // Sync to local
+            setCustomKnowledge(content);
+            return;
+          }
+        } else {
+            console.warn("Failed to fetch from Git, falling back to local storage.");
+        }
+      } catch (error) {
+        console.error("Error fetching from Git, falling back to local storage:", error);
+      }
+    }
+
+    // Fallback to local storage
     const knowledge = await getKnowledge();
     setCustomKnowledge(knowledge || '');
   }, []);
 
   useEffect(() => {
-    loadKnowledge();
-  }, [loadKnowledge]);
+    initializeKnowledge();
+  }, [initializeKnowledge]);
 
   const handleTestConnection = useCallback(async () => {
     if (!useRealApi) return;
@@ -233,7 +255,7 @@ export const SqlSimulator: React.FC = () => {
         isOpen={isSettingsOpen} 
         onClose={() => setIsSettingsOpen(false)}
         initialKnowledge={customKnowledge}
-        onKnowledgeSaved={loadKnowledge}
+        onKnowledgeSaved={initializeKnowledge}
         dbSchema={dbSchema}
       />
       <QueryHistoryModal

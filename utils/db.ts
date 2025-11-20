@@ -79,9 +79,14 @@ export const getDeviceSetting = async (key: string): Promise<any> => {
   });
 };
 
-// Git URL 저장/불러오기 헬퍼
-export const saveGitUrl = async (url: string) => saveDeviceSetting('gitKnowledgeUrl', url);
-export const getGitUrl = async () => getDeviceSetting('gitKnowledgeUrl');
+// Git Config 저장/불러오기 헬퍼
+export interface GitConfig {
+    gistId: string;
+    pat: string;
+}
+export const saveGitConfig = async (config: GitConfig) => saveDeviceSetting('gitConfig', config);
+export const getGitConfig = async (): Promise<GitConfig | null> => getDeviceSetting('gitConfig');
+
 
 // --- Query History 관련 ---
 export const saveQueryHistory = async (item: Omit<QueryHistoryItem, 'id' | 'timestamp'> & { id?: number }): Promise<void> => {
