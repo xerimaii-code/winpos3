@@ -23,6 +23,18 @@ export const generateSqlFromNaturalLanguage = async (
         return "-- API Key not configured. Please check Vercel Environment Variables.";
     }
 
+    // 현재 날짜 및 연월 계산 (YYYYMMDD, YYMM)
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const day = now.getDate().toString().padStart(2, '0');
+    const yymm = `${year.toString().substring(2)}${month}`;
+    const yyyymmdd = `${year}${month}${day}`;
+
+    const dateContext = `[System Context]
+Current Date: ${yyyymmdd} (Format: YYYYMMDD)
+Current Month Suffix: ${yymm} (Format: YYMM for table names like outm_${yymm})`;
+
     // 동적 스키마(DB에서 긁어온 것)
     const schemaPart = schemaContext 
       ? `[Target Database Schema]\n${schemaContext}` 
@@ -33,7 +45,7 @@ export const generateSqlFromNaturalLanguage = async (
       ? `[Business Rules & Custom Knowledge]\n${customKnowledge}`
       : ``;
 
-    const fullContext = `${schemaPart}\n\n${knowledgePart}`;
+    const fullContext = `${dateContext}\n\n${schemaPart}\n\n${knowledgePart}`;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
@@ -44,6 +56,7 @@ export const generateSqlFromNaturalLanguage = async (
       Instructions:
       - Use the provided Schema and Business Rules strictly.
       - If specific codes (e.g., 'sale_status=9') are defined in Business Rules, apply them to filter data.
+      - Use the Current Month Suffix for table names (e.g., outm_${yymm}) unless a specific date is requested.
       - Only return the raw SQL string, no markdown formatting, no explanation.
       
       Request: ${prompt}`,

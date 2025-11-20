@@ -42,7 +42,13 @@ export const DEFAULT_KNOWLEDGE = `[Winpos3 Database Schema & Business Rules]
 
 7. 핵심 로직 가이드
 - 모든 _YYMM 테이블은 월별 파티션입니다 (예: outm_2310). 쿼리 시 적절한 월 테이블을 선택하세요.
-- '오늘 매출', '실시간 매출', '현재 매출' 조회 시 반드시 outd_YYMM 또는 outm_YYMM 테이블을 사용해야 합니다. (마감 테이블 아님)
-- 매출 조회 시 'sale_status=9' (연습모드)는 반드시 제외해야 합니다.
+- 질문에 **'오늘', '현재', '지금', '실시간', '현시점'** 등의 단어가 포함되면, 반드시 **outd_YYMM** (상세) 또는 **outm_YYMM** (마스터) 테이블을 조회해야 합니다. 절대 별도의 마감 테이블을 찾지 마세요.
+- 매출 조회 시 'sale_status=9' (연습모드)는 반드시 제외해야 합니다. (WHERE sale_status != '9')
 - 재고(curjago)는 실시간으로 변동되므로 parts 테이블을 조회합니다.
+
+8. 자주 묻는 질문 예시 쿼리 (Example Queries)
+- Q: "오늘 매출 얼마야?" (Today's Sales)
+  A: SELECT ISNULL(SUM(tmamoney1), 0) as TotalSales 
+     FROM outm_{CurrentYYMM} 
+     WHERE day1 = '{CurrentYYYYMMDD}' AND sale_status != '9'
 `;

@@ -6,7 +6,7 @@ import { QueryResult } from '../types';
 import { SettingsModal } from './SettingsModal';
 import { getKnowledge, saveQueryHistory, getDbSchema, saveDbSchema } from '../utils/db';
 import { QueryHistoryModal } from './QueryHistoryModal';
-import { BarcodeScannerModal } from './BarcodeScannerModal'; // Import 추가
+import { BarcodeScannerModal } from './BarcodeScannerModal'; 
 import { MOCK_USERS, DEFAULT_KNOWLEDGE } from '../constants';
 
 export const SqlSimulator: React.FC = () => {
@@ -23,7 +23,7 @@ export const SqlSimulator: React.FC = () => {
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [isScannerOpen, setIsScannerOpen] = useState(false); // 스캐너 상태 추가
+  const [isScannerOpen, setIsScannerOpen] = useState(false); 
   const [customKnowledge, setCustomKnowledge] = useState<string>('');
 
   const [showSql, setShowSql] = useState(false);
@@ -64,7 +64,6 @@ export const SqlSimulator: React.FC = () => {
         setConnectedDbName(dbName);
         setConnectionMsg(`Server: ${serverVersion}...`);
         
-        // 스키마가 비어있거나 강제 새로고침일 경우에만 스키마 조회
         if (!dbSchema || forceRefreshSchema) {
             const schemaQuery = `
                 SELECT 
@@ -104,7 +103,6 @@ export const SqlSimulator: React.FC = () => {
                     learnedSchema += `Table '${table}': ${columns.join(', ')}\n`;
                 });
                 setDbSchema(learnedSchema);
-                // 자동으로 학습한 스키마도 IndexedDB에 저장해둠
                 await saveDbSchema(learnedSchema);
                 console.log("DB Schema fetched from DB and saved to IDB.");
             }
@@ -123,26 +121,22 @@ export const SqlSimulator: React.FC = () => {
     } finally {
       setTestLoading(false);
     }
-  }, [useRealApi, dbSchema]); // dbSchema dependency added to avoid re-fetching if already exists
+  }, [useRealApi, dbSchema]);
   
   const initializeAppState = useCallback(async () => {
     setLoading(true);
     try {
-        // 1. Load knowledge from IDB. If empty, use DEFAULT_KNOWLEDGE
         const knowledge = await getKnowledge();
         setCustomKnowledge(knowledge || DEFAULT_KNOWLEDGE);
         console.log("Knowledge initialized.");
 
-        // 2. Load schema from IDB
         const schema = await getDbSchema();
         if (schema) {
             setDbSchema(schema);
             console.log("DB Schema loaded from IndexedDB.");
-            // 스키마가 있으면 연결 테스트만 수행 (스키마 페치 X)
             await handleTestConnection(false);
         } else {
             console.log("No DB Schema in IDB. Connecting to fetch...");
-            // 스키마가 없으면 연결 테스트 및 스키마 페치 수행
             await handleTestConnection(true);
         }
     } catch (err) {
@@ -156,18 +150,23 @@ export const SqlSimulator: React.FC = () => {
     initializeAppState();
   }, [initializeAppState]);
 
-  const handleSimulate = async (queryToRun?: string) => {
-    const naturalInput = typeof queryToRun === 'string' ? '' : input;
-    if (!naturalInput.trim() && !queryToRun) return;
-
+  const handleSimulate = async (sqlToRun?: string) => {
+    const naturalInput = sqlToRun ? '' : input;
+    if (!naturalInput.trim() && !sqlToRun) return;
+    
     setLoading(true);
     setResult(null);
     setIsAnalyzing(false);
+    setShowSql(false); // Reset SQL visibility on new query
+    
     try {
-      const sql = typeof queryToRun === 'string' 
-        ? queryToRun 
-        : await generateSqlFromNaturalLanguage(naturalInput, dbSchema, customKnowledge);
-
+      // 1. SQL 생성
+      let sql = sqlToRun;
+      if (!sql) {
+        sql = await generateSqlFromNaturalLanguage(naturalInput, dbSchema, customKnowledge);
+      }
+      
+      // 2. DB 실행
       if (useRealApi) {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -185,7 +184,7 @@ export const SqlSimulator: React.FC = () => {
           }
           const json = await response.json();
           const queryData = json.data || [];
-          setResult({ sql, data: queryData });
+          setResult({ sql: sql!, data: queryData });
 
           if (queryData.length > 0 && naturalInput) { 
             setIsAnalyzing(true);
@@ -197,10 +196,10 @@ export const SqlSimulator: React.FC = () => {
         } catch (apiErr: any) {
            let errMsg = apiErr.message;
            if (apiErr.name === 'AbortError') errMsg = 'Request Timed Out (15s). Check network/firewall.';
-           setResult({ sql, data: [], error: `API Error: ${errMsg}` });
+           setResult({ sql: sql!, data: [], error: `API Error: ${errMsg}` });
         }
       } else {
-         setResult({ sql, data: [...MOCK_USERS] });
+         setResult({ sql: sql!, data: [...MOCK_USERS] });
       }
     } catch (err) {
       setResult({ sql: '-- Error generating SQL', data: [], error: 'Failed to process request via Gemini' });
@@ -212,6 +211,7 @@ export const SqlSimulator: React.FC = () => {
   const handleClear = () => {
     setInput('');
     setResult(null);
+    setShowSql(false);
   };
   
   const handleSaveQuery = async () => {
@@ -225,16 +225,13 @@ export const SqlSimulator: React.FC = () => {
   
   const handleUseQuery = (name: string, query: string) => {
     setInput(name);
-    handleSimulate(query);
+    handleSimulate(query); // 저장된 쿼리는 바로 실행
     setIsHistoryOpen(false);
   };
 
-  // 바코드 스캔 완료 핸들러
   const handleScanComplete = (decodedText: string) => {
     setInput(decodedText);
     setIsScannerOpen(false);
-    // 옵션: 스캔 후 바로 검색하려면 아래 주석 해제
-    // handleSimulate(undefined); 
   };
 
   const getStatusIndicator = () => {
@@ -263,7 +260,7 @@ export const SqlSimulator: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4 pb-20">
+    <div className="space-y-3 pb-20">
       <SettingsModal 
         isOpen={isSettingsOpen} 
         onClose={() => setIsSettingsOpen(false)}
@@ -283,6 +280,7 @@ export const SqlSimulator: React.FC = () => {
         onScan={handleScanComplete}
       />
 
+      {/* Execution Window (Input & Buttons) */}
       <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4 sticky top-16 z-30">
         <div className="flex items-center justify-between gap-2 mb-4">
             <div className="flex items-center gap-2">{getStatusIndicator()}</div>
@@ -309,18 +307,21 @@ export const SqlSimulator: React.FC = () => {
                 )}
             </div>
         </div>
+
         <div className="flex gap-2 mt-3">
             <button onClick={() => handleSimulate()} disabled={loading || isAnalyzing} className="flex-1 bg-rose-600 hover:bg-rose-700 text-white py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 disabled:opacity-70 disabled:active:scale-100">
-                {loading || isAnalyzing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5 fill-current" />} {loading ? '실행 중...' : (isAnalyzing ? '분석 중...' : '실행')}
+                {loading || isAnalyzing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5 fill-current" />} {loading ? '처리 중...' : (isAnalyzing ? '분석 중...' : '실행')}
             </button>
             <button onClick={() => setIsScannerOpen(true)} className="flex-1 bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md active:scale-95">
                 <ScanBarcode className="w-5 h-5" /> SCAN
             </button>
         </div>
       </div>
+      
       {result && (
-        <div className="space-y-4 animate-fade-in">
-          { (result.summary || isAnalyzing) && 
+        <div className="space-y-3 animate-fade-in">
+          {/* 1. Summary Panel */}
+          { (result.summary || isAnalyzing) && (
             <div className="bg-rose-50 border-l-4 border-rose-400 p-4 rounded-r-lg shadow-sm">
                 <div className="flex items-start">
                     <div className="flex-shrink-0"><BrainCircuit className="h-5 w-5 text-rose-500" /></div>
@@ -334,8 +335,9 @@ export const SqlSimulator: React.FC = () => {
                     </div>
                 </div>
             </div>
-          }
+          ) }
 
+          {/* 2. Data Table Panel (Moved Up) */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-[200px]">
             <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between"><div className="flex items-center gap-2"><Database className="w-4 h-4 text-rose-600" /><span className="text-sm font-bold text-slate-700">조회 결과 <span className="text-slate-400 font-normal">({result.data.length}건)</span></span></div></div>
             <div className="p-0 flex-1 bg-slate-50/30">
@@ -345,17 +347,19 @@ export const SqlSimulator: React.FC = () => {
               )}
             </div>
           </div>
+
+          {/* 3. SQL Panel (Moved Down) */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="w-full bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+            <div className="w-full bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between cursor-pointer" onClick={() => setShowSql(!showSql)}>
                <div className="flex items-center gap-2"><Code className="w-4 h-4 text-slate-500" /><span className="text-xs font-bold text-slate-500 uppercase">Generated Query</span></div>
                <div className='flex items-center gap-2'>
                 {!result.error && result.sql.trim() && (
-                    <button onClick={handleSaveQuery} className='flex items-center gap-1.5 text-xs text-slate-500 hover:text-rose-600 transition-colors font-semibold'>
+                    <button onClick={(e) => { e.stopPropagation(); handleSaveQuery(); }} className='flex items-center gap-1.5 text-xs text-slate-500 hover:text-rose-600 transition-colors font-semibold mr-2'>
                         <BookmarkPlus className='w-3.5 h-3.5' />
                         Save
                     </button>
                 )}
-                <button onClick={() => setShowSql(!showSql)} className="p-1 rounded-full hover:bg-slate-200">{showSql ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}</button>
+                <div className="p-1 rounded-full hover:bg-slate-200">{showSql ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}</div>
                </div>
             </div>
             {showSql && (<div className="p-4 font-mono text-xs text-slate-600 bg-slate-50/50 border-t border-slate-100 overflow-x-auto whitespace-pre-wrap">{result.sql}</div>)}
