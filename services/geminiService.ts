@@ -25,8 +25,17 @@ export const generateSqlFromNaturalLanguage = async (prompt: string): Promise<st
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: `Convert the following natural language request into a Microsoft SQL Server (T-SQL) query. 
-      The table name is 'Users'. Columns are: id (int), name (nvarchar), email (nvarchar), role (nvarchar), lastLogin (datetime).
-      Only return the raw SQL string, no markdown formatting, no explanation.
+      
+      Database Schema Context:
+      1. Table 'Users': id (int), name (nvarchar), email (nvarchar), role (nvarchar), lastLogin (datetime).
+      2. Table 'outm_yymm' (POS Sales Master): 
+         - sale_date (datetime): Transaction timestamp
+         - tot_sale_amt (numeric): Total sales amount
+         - bill_no (varchar): Receipt number
+      
+      Instructions:
+      - If asked for "hourly sales" (시간대별 매출), extract the hour from 'sale_date' using DATEPART(HOUR, sale_date).
+      - Only return the raw SQL string, no markdown formatting, no explanation.
       
       Request: ${prompt}`,
       config: {
@@ -40,6 +49,6 @@ export const generateSqlFromNaturalLanguage = async (prompt: string): Promise<st
     return sql;
   } catch (error) {
     console.error("Gemini SQL Generation Error:", error);
-    return "SELECT * FROM Users -- Error: API Key invalid or Quota exceeded";
+    return "SELECT * FROM outm_yymm -- Error: API Key invalid or Quota exceeded";
   }
 };
