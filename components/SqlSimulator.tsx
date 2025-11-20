@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Play, Database, Loader2, Sparkles, Code, Wifi, WifiOff, Activity, CheckCircle2, XCircle, HelpCircle, Server } from 'lucide-react';
+import { Search, Play, Database, Loader2, Sparkles, Code, Wifi, WifiOff, Activity, CheckCircle2, XCircle, HelpCircle, Server, BrainCircuit } from 'lucide-react';
 import { MOCK_USERS } from '../constants';
 import { generateSqlFromNaturalLanguage } from '../services/geminiService';
 import { QueryResult } from '../types';
@@ -15,8 +15,9 @@ export const SqlSimulator: React.FC = () => {
   const [connectionMsg, setConnectionMsg] = useState('');
   const [connectedDbName, setConnectedDbName] = useState<string>('');
   const [backendVersion, setBackendVersion] = useState<string>('Checking...');
+  const [dbSchema, setDbSchema] = useState<string>(''); // 학습된 스키마 저장
 
-  // Function to test connectivity
+  // Function to test connectivity and learn schema
   const handleTestConnection = useCallback(async () => {
     if (!useRealApi) return;
 
@@ -25,6 +26,7 @@ export const SqlSimulator: React.FC = () => {
     setResult(null);
     setConnectedDbName('');
     setBackendVersion('Checking...');
+    setDbSchema('');
 
     // 타임아웃 15초로 연장
     const controller = new AbortController();
@@ -47,7 +49,7 @@ export const SqlSimulator: React.FC = () => {
 
       const json = await response.json();
       
-      // 백엔드 버전 확인 로직 (v5.7)
+      // 백엔드 버전 확인 로직 (v6.0)
       if (json.apiVersion) {
         setBackendVersion(json.apiVersion);
       } else {
@@ -63,20 +65,47 @@ export const SqlSimulator: React.FC = () => {
         setConnectedDbName(dbName);
         setConnectionMsg(`Server: ${serverVersion}...`);
         
-        // 2. 연결 성공 시 테이블 목록 조회
-        const tableQuery = "SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE' ORDER BY TABLE_NAME";
-        const tableResponse = await fetch('/api/query', {
+        // 2. 연결 성공 시 스키마 학습 (테이블 및 컬럼 정보 조회)
+        const schemaQuery = `
+            SELECT t.TABLE_NAME, c.COLUMN_NAME, c.DATA_TYPE
+            FROM INFORMATION_SCHEMA.TABLES t
+            JOIN INFORMATION_SCHEMA.COLUMNS c ON t.TABLE_NAME = c.TABLE_NAME
+            WHERE t.TABLE_TYPE = 'BASE TABLE'
+            ORDER BY t.TABLE_NAME, c.ORDINAL_POSITION
+        `;
+        
+        const schemaResponse = await fetch('/api/query', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: tableQuery }),
+            body: JSON.stringify({ query: schemaQuery }),
             signal: controller.signal
         });
 
-        if (tableResponse.ok) {
-            const tableJson = await tableResponse.json();
+        if (schemaResponse.ok) {
+            const schemaJson = await schemaResponse.json();
+            const rows = schemaJson.data;
+            
+            // 데이터 가공하여 AI 학습용 텍스트 생성
+            const schemaMap: Record<string, string[]> = {};
+            rows.forEach((row: any) => {
+                if (!schemaMap[row.TABLE_NAME]) {
+                    schemaMap[row.TABLE_NAME] = [];
+                }
+                schemaMap[row.TABLE_NAME].push(`${row.COLUMN_NAME} (${row.DATA_TYPE})`);
+            });
+
+            let learnedSchema = "";
+            Object.entries(schemaMap).forEach(([table, columns]) => {
+                learnedSchema += `Table '${table}': ${columns.join(', ')}\n`;
+            });
+            
+            setDbSchema(learnedSchema); // 스키마 저장
+            
+            // UI에는 테이블 목록만 간단히 보여주기
+            const simplifiedData = Object.keys(schemaMap).map(tableName => ({ TABLE_NAME: tableName, COLUMNS_COUNT: schemaMap[tableName].length }));
             setResult({
-                sql: tableQuery,
-                data: tableJson.data
+                sql: "-- AI has learned the database structure successfully.",
+                data: simplifiedData
             });
         } else {
             setResult({
@@ -116,7 +145,8 @@ export const SqlSimulator: React.FC = () => {
     setConnectionStatus('idle');
 
     try {
-      const sql = await generateSqlFromNaturalLanguage(input);
+      // 저장된 스키마(dbSchema)를 AI에게 전달
+      const sql = await generateSqlFromNaturalLanguage(input, dbSchema);
 
       if (useRealApi) {
         const controller = new AbortController();
@@ -179,15 +209,15 @@ export const SqlSimulator: React.FC = () => {
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-6">
           <div className="flex items-start gap-4">
-            <div className="p-3 bg-cyan-600/20 text-cyan-400 rounded-lg">
-              <Sparkles className="w-6 h-6" />
+            <div className="p-3 bg-pink-600/20 text-pink-400 rounded-lg">
+              <BrainCircuit className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-xl font-semibold text-white">AI SQL Query Simulator</h3>
               </div>
               <p className="text-slate-400 mt-1 text-sm">
-                자연어를 SQL로 변환하여 실행합니다. (winpos3 지원)
+                DB 구조를 자동으로 학습하여 쿼리를 생성합니다. (winpos3 지원)
               </p>
             </div>
           </div>
@@ -197,10 +227,10 @@ export const SqlSimulator: React.FC = () => {
               <button
                 onClick={handleTestConnection}
                 disabled={testLoading}
-                className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition-all text-sm font-medium whitespace-nowrap"
+                className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-pink-500/30 bg-pink-500/10 text-pink-400 hover:bg-pink-500/20 transition-all text-sm font-medium whitespace-nowrap"
               >
                 {testLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
-                {testLoading ? '접속 중...' : '연결 테스트'}
+                {testLoading ? '구조 학습 중...' : '연결 및 학습'}
               </button>
             )}
 
@@ -224,19 +254,26 @@ export const SqlSimulator: React.FC = () => {
 
         {/* Connection Status Big Banner */}
         {useRealApi && connectionStatus === 'success' && (
-            <div className="mb-6 bg-cyan-900/20 border border-cyan-500/50 rounded-lg p-4 flex flex-col md:flex-row md:items-center gap-4 animate-fade-in">
-                <div className="p-3 bg-cyan-500/20 rounded-full text-cyan-400 self-start md:self-center">
+            <div className="mb-6 bg-pink-900/10 border border-pink-500/50 rounded-lg p-4 flex flex-col md:flex-row md:items-center gap-4 animate-fade-in">
+                <div className="p-3 bg-pink-500/20 rounded-full text-pink-400 self-start md:self-center">
                     <Server className="w-6 h-6" />
                 </div>
                 <div className="flex-1">
-                    <h4 className="text-cyan-300 font-bold text-lg flex items-center gap-2">
+                    <h4 className="text-pink-300 font-bold text-lg flex items-center gap-2">
                         Connected to: <span className="text-white underline underline-offset-4">{connectedDbName}</span>
                     </h4>
-                    <p className="text-cyan-400/70 text-xs font-mono mt-1">{connectionMsg}</p>
+                    <div className="flex flex-col sm:flex-row gap-2 mt-1">
+                        <span className="text-pink-400/70 text-xs font-mono">{connectionMsg}</span>
+                        {dbSchema && (
+                             <span className="flex items-center gap-1 text-xs text-green-400 font-bold bg-green-900/30 px-2 py-0.5 rounded border border-green-500/30">
+                                <CheckCircle2 className="w-3 h-3" /> AI 학습 완료 (Dynamic Schema)
+                             </span>
+                        )}
+                    </div>
                 </div>
                 <div className="bg-slate-950 px-3 py-2 rounded border border-slate-700 text-right">
                     <div className="text-[10px] uppercase text-slate-500 font-bold">API Status</div>
-                    <div className={`text-sm font-mono ${backendVersion.includes('v5.7') ? 'text-cyan-400' : 'text-red-400'}`}>
+                    <div className={`text-sm font-mono ${backendVersion.includes('v6.0') ? 'text-pink-400' : 'text-red-400'}`}>
                         {backendVersion}
                     </div>
                 </div>
@@ -268,14 +305,14 @@ export const SqlSimulator: React.FC = () => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSimulate()}
-            placeholder={useRealApi ? `[${connectedDbName || 'winpos3'}] outm_yymm 테이블에서 시간대별 매출 보여줘` : "예: '관리자(Admin) 권한을 가진 사용자 보여줘'"}
-            className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg py-4 pl-12 pr-24 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all placeholder-slate-500"
+            placeholder={useRealApi ? `[${connectedDbName || 'winpos3'}] 원하는 데이터를 자연어로 물어보세요` : "예: '관리자(Admin) 권한을 가진 사용자 보여줘'"}
+            className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg py-4 pl-12 pr-24 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all placeholder-slate-500"
           />
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 w-5 h-5" />
           <button
             onClick={handleSimulate}
             disabled={loading || !input.trim()}
-            className="absolute right-2 top-1/2 -translate-y-1/2 bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="absolute right-2 top-1/2 -translate-y-1/2 bg-pink-600 hover:bg-pink-500 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
             실행
@@ -287,17 +324,17 @@ export const SqlSimulator: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
           <div className="bg-slate-900 rounded-xl border border-slate-700 overflow-hidden flex flex-col">
             <div className="bg-slate-800 px-4 py-3 border-b border-slate-700 flex items-center gap-2">
-              <Code className="w-4 h-4 text-cyan-400" />
+              <Code className="w-4 h-4 text-pink-400" />
               <span className="text-sm font-mono text-slate-300">Generated T-SQL</span>
             </div>
-            <div className="p-4 font-mono text-sm text-cyan-300 overflow-auto flex-1 whitespace-pre-wrap">
+            <div className="p-4 font-mono text-sm text-pink-300 overflow-auto flex-1 whitespace-pre-wrap">
               {result.sql}
             </div>
           </div>
 
           <div className="bg-slate-900 rounded-xl border border-slate-700 overflow-hidden flex flex-col">
             <div className="bg-slate-800 px-4 py-3 border-b border-slate-700 flex items-center gap-2">
-              <Database className="w-4 h-4 text-cyan-400" />
+              <Database className="w-4 h-4 text-pink-400" />
               <span className="text-sm font-mono text-slate-300">
                 {result.error ? 'Error' : `Result Data (${result.data.length} rows)`}
               </span>

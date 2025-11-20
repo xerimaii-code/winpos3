@@ -11,12 +11,12 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>(Tab.SIMULATOR);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 selection:bg-cyan-500/30">
+    <div className="min-h-screen bg-slate-950 text-slate-200 selection:bg-pink-500/30">
       {/* Header */}
       <header className="sticky top-0 z-50 backdrop-blur-lg bg-slate-950/80 border-b border-slate-800">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-cyan-600 p-2 rounded-lg shadow-lg shadow-cyan-500/20">
+            <div className="bg-pink-600 p-2 rounded-lg shadow-lg shadow-pink-500/20">
               <Database className="w-6 h-6 text-white" />
             </div>
             <div>
@@ -24,8 +24,8 @@ const App: React.FC = () => {
                 MS SQL Connector
               </h1>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-mono text-white bg-cyan-600/80 px-2 py-0.5 rounded border border-cyan-500 shadow-sm">
-                  Frontend v5.7
+                <span className="text-xs font-mono text-white bg-pink-600/80 px-2 py-0.5 rounded border border-pink-500 shadow-sm">
+                  Frontend v6.0 (Brain)
                 </span>
               </div>
             </div>
@@ -47,7 +47,7 @@ const App: React.FC = () => {
               onClick={() => setActiveTab(Tab.SIMULATOR)}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
                 activeTab === Tab.SIMULATOR 
-                  ? 'bg-cyan-600 text-white shadow-sm shadow-cyan-500/20' 
+                  ? 'bg-pink-600 text-white shadow-sm shadow-pink-500/20' 
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
               }`}
             >
@@ -79,7 +79,7 @@ const App: React.FC = () => {
               </h2>
               <p className="text-slate-400 text-lg">
                 웹 브라우저는 보안상의 이유로 데이터베이스에 직접 접속할 수 없습니다.<br/>
-                아래 <span className="text-cyan-400 font-semibold">5단계 순서(Step-by-Step)</span>를 따라 안전한 연결 구조를 구축하세요.
+                아래 <span className="text-pink-400 font-semibold">5단계 순서(Step-by-Step)</span>를 따라 안전한 연결 구조를 구축하세요.
               </p>
             </div>
 
@@ -108,10 +108,10 @@ const App: React.FC = () => {
           <div className="animate-fade-in">
             <div className="max-w-4xl mx-auto">
               <div className="mb-8">
-                 <h2 className="text-3xl font-bold text-white mb-3">SQL Query Simulator</h2>
+                 <h2 className="text-3xl font-bold text-white mb-3">SQL Query Simulator (AI Brain)</h2>
                  <p className="text-slate-400">
-                   이곳은 React 앱이 백엔드와 통신하는 과정을 시뮬레이션하는 공간입니다.
-                   실제 DB는 없지만, Gemini가 작성한 SQL 쿼리가 어떻게 동작할지 미리 확인해보세요.
+                   DB 연결 시 전체 구조를 자동으로 학습합니다. 테이블 이름이나 컬럼명을 몰라도 자연어로 질문하세요.
+                   AI가 <span className="text-pink-400 font-mono">winpos3</span> 데이터베이스 구조에 맞춰 최적의 쿼리를 생성합니다.
                  </p>
               </div>
               <SqlSimulator />

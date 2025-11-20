@@ -13,7 +13,7 @@ const getAiClient = () => {
   return new GoogleGenAI({ apiKey: apiKey || 'DUMMY_KEY_FOR_UI_RENDERING' });
 };
 
-export const generateSqlFromNaturalLanguage = async (prompt: string): Promise<string> => {
+export const generateSqlFromNaturalLanguage = async (prompt: string, schemaContext?: string): Promise<string> => {
   try {
     const ai = getAiClient();
     
@@ -22,19 +22,22 @@ export const generateSqlFromNaturalLanguage = async (prompt: string): Promise<st
         return "-- API Key not configured. Please check Vercel Environment Variables.";
     }
 
+    // 동적 스키마가 있으면 그것을 사용하고, 없으면 기본 컨텍스트 사용
+    const context = schemaContext 
+      ? `Target Database Schema (Dynamic Learning):\n${schemaContext}` 
+      : `Default Schema Context:
+         1. Table 'Users': id (int), name (nvarchar), email (nvarchar), role (nvarchar), lastLogin (datetime).
+         2. Table 'outm_yymm' (POS Sales Master): sale_date (datetime), tot_sale_amt (numeric), bill_no (varchar).`;
+
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: `Convert the following natural language request into a Microsoft SQL Server (T-SQL) query. 
       
-      Database Schema Context:
-      1. Table 'Users': id (int), name (nvarchar), email (nvarchar), role (nvarchar), lastLogin (datetime).
-      2. Table 'outm_yymm' (POS Sales Master): 
-         - sale_date (datetime): Transaction timestamp
-         - tot_sale_amt (numeric): Total sales amount
-         - bill_no (varchar): Receipt number
+      ${context}
       
       Instructions:
-      - If asked for "hourly sales" (시간대별 매출), extract the hour from 'sale_date' using DATEPART(HOUR, sale_date).
+      - Use the provided schema strictly. Do not hallucinate table names.
+      - If asked for "hourly sales" or time-based analysis, use DATEPART or relevant T-SQL functions.
       - Only return the raw SQL string, no markdown formatting, no explanation.
       
       Request: ${prompt}`,
