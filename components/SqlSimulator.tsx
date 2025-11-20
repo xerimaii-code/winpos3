@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Database, Loader2, Code, Activity, XCircle, Settings, ChevronDown, ChevronUp, AlertTriangle, Play, ScanBarcode, X, Bookmark, BookmarkPlus, BrainCircuit, Trash2, PlayCircle, Clock } from 'lucide-react';
+import { Search, Database, Loader2, Code, Activity, XCircle, Settings, ChevronDown, ChevronUp, AlertTriangle, Play, ScanBarcode, X, BookmarkPlus, BrainCircuit, PlayCircle, History } from 'lucide-react';
 import { generateSqlFromNaturalLanguage, analyzeQueryResult } from '../services/geminiService';
 import { QueryResult } from '../types';
 import { SettingsModal } from './SettingsModal';
@@ -136,15 +136,12 @@ export const SqlSimulator: React.FC = () => {
     try {
         const knowledge = await getKnowledge();
         setCustomKnowledge(knowledge || DEFAULT_KNOWLEDGE);
-        console.log("Knowledge initialized.");
 
         const schema = await getDbSchema();
         if (schema) {
             setDbSchema(schema);
-            console.log("DB Schema loaded from IndexedDB.");
             await handleTestConnection(false);
         } else {
-            console.log("No DB Schema in IDB. Connecting to fetch...");
             await handleTestConnection(true);
         }
         
@@ -167,16 +164,14 @@ export const SqlSimulator: React.FC = () => {
     setLoading(true);
     setResult(null);
     setIsAnalyzing(false);
-    setShowSql(false); // Reset SQL visibility on new query
+    setShowSql(false);
     
     try {
-      // 1. SQL 생성
       let sql = sqlToRun;
       if (!sql) {
         sql = await generateSqlFromNaturalLanguage(naturalInput, dbSchema, customKnowledge);
       }
       
-      // 2. DB 실행
       if (useRealApi) {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -252,7 +247,7 @@ export const SqlSimulator: React.FC = () => {
 
   const handleQuickDelete = async (e: React.MouseEvent, id: number) => {
       e.stopPropagation();
-      if (window.confirm("이 항목을 삭제하시겠습니까?")) {
+      if (window.confirm("이 히스토리를 삭제하시겠습니까?")) {
           await deleteQueryHistory(id);
           await fetchQuickActions();
       }
@@ -304,38 +299,42 @@ export const SqlSimulator: React.FC = () => {
         onScan={handleScanComplete}
       />
 
-      {/* Quick Actions (Query History Pills) */}
-      {quickActions.length > 0 && (
-          <div className="flex flex-wrap gap-2 px-1 animate-fade-in">
-              {quickActions.map(item => (
-                  <div key={item.id} 
-                       onClick={() => handleQuickRun(item)}
-                       className="group flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-600 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 cursor-pointer transition-all shadow-sm"
-                  >
-                      <PlayCircle className="w-3.5 h-3.5" />
-                      <span>{item.name}</span>
-                      <button 
-                        onClick={(e) => handleQuickDelete(e, item.id!)}
-                        className="ml-1 p-0.5 rounded-full text-slate-400 hover:bg-red-100 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
-                      >
-                          <X className="w-3 h-3" />
-                      </button>
-                  </div>
-              ))}
-          </div>
-      )}
-
       {/* Execution Window (Input & Buttons) */}
       <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4 sticky top-16 z-30">
-        <div className="flex items-center justify-between gap-2 mb-4">
+        {/* Header Status & Buttons */}
+        <div className="flex items-center justify-between gap-2 mb-3">
             <div className="flex items-center gap-2">{getStatusIndicator()}</div>
             <div className="flex items-center gap-2">
                 {useRealApi && <button onClick={() => handleTestConnection(true)} disabled={testLoading || loading} className="p-2 rounded-lg bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors" title="DB 연결 및 스키마 새로고침">{testLoading ? <Loader2 className="w-5 h-5 animate-spin text-blue-600" /> : <Activity className="w-5 h-5" />}</button>}
                 <button onClick={() => setIsSettingsOpen(true)} className="p-2 rounded-lg bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors" title="설정"><Settings className="w-5 h-5" /></button>
             </div>
         </div>
+
+        {/* Quick Actions (Query History Chips) - Moved Inside */}
+        {quickActions.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-3 animate-fade-in">
+              {quickActions.map(item => (
+                  <div key={item.id} 
+                       onClick={() => handleQuickRun(item)}
+                       className="group flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 border border-slate-200 rounded-full text-[11px] font-bold text-slate-600 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 cursor-pointer transition-all shadow-sm select-none"
+                  >
+                      <PlayCircle className="w-3 h-3" />
+                      <span className="max-w-[100px] truncate">{item.name}</span>
+                      <button 
+                        onClick={(e) => handleQuickDelete(e, item.id!)}
+                        className="ml-0.5 p-0.5 rounded-full text-slate-400 hover:bg-rose-200 hover:text-rose-700 transition-colors"
+                        title="삭제"
+                      >
+                          <X className="w-3 h-3" />
+                      </button>
+                  </div>
+              ))}
+          </div>
+        )}
+
+        {/* Input Area */}
         <div className="relative flex-1">
-            <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSimulate()} placeholder="상품명, 바코드 또는 질문..." className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl py-3 pl-10 pr-24 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all placeholder-slate-400 font-medium" />
+            <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSimulate()} placeholder="자연어로 질문하거나 바코드를 스캔하세요..." className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl py-3 pl-10 pr-24 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all placeholder-slate-400 font-medium shadow-inner" />
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
             <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
                 {customKnowledge && (
@@ -354,10 +353,13 @@ export const SqlSimulator: React.FC = () => {
 
         <div className="flex gap-2 mt-3">
             <button onClick={() => handleSimulate()} disabled={loading || isAnalyzing} className="flex-1 bg-rose-600 hover:bg-rose-700 text-white py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 disabled:opacity-70 disabled:active:scale-100">
-                {loading || isAnalyzing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5 fill-current" />} {loading ? '처리 중...' : (isAnalyzing ? '분석 중...' : '실행')}
+                {loading || isAnalyzing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5 fill-current" />} {loading ? '처리 중...' : (isAnalyzing ? '분석 중...' : '실행 (Run)')}
             </button>
             <button onClick={() => setIsScannerOpen(true)} className="flex-1 bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md active:scale-95">
-                <ScanBarcode className="w-5 h-5" /> SCAN
+                <ScanBarcode className="w-5 h-5" /> 스캔 (Scan)
+            </button>
+            <button onClick={() => setIsHistoryOpen(true)} className="w-12 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold text-sm transition-all flex items-center justify-center shadow-sm border border-slate-200" title="전체 히스토리 관리">
+                <History className="w-5 h-5" />
             </button>
         </div>
       </div>
@@ -381,7 +383,7 @@ export const SqlSimulator: React.FC = () => {
             </div>
           ) }
 
-          {/* 2. Data Table Panel (Moved Up) */}
+          {/* 2. Data Table Panel */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-[200px]">
             <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between"><div className="flex items-center gap-2"><Database className="w-4 h-4 text-rose-600" /><span className="text-sm font-bold text-slate-700">조회 결과 <span className="text-slate-400 font-normal">({result.data.length}건)</span></span></div></div>
             <div className="p-0 flex-1 bg-slate-50/30">
@@ -392,7 +394,7 @@ export const SqlSimulator: React.FC = () => {
             </div>
           </div>
 
-          {/* 3. SQL Panel (Moved Down) */}
+          {/* 3. SQL Panel */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="w-full bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between cursor-pointer" onClick={() => setShowSql(!showSql)}>
                <div className="flex items-center gap-2"><Code className="w-4 h-4 text-slate-500" /><span className="text-xs font-bold text-slate-500 uppercase">Generated Query</span></div>

@@ -35,9 +35,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
         setKnowledge(initialKnowledge);
         setLocalDbSchema(dbSchema);
         setStatusMessage(null);
-        loadCameras();
+        if (activeTab === 'camera') {
+            loadCameras();
+        }
     }
-  }, [isOpen, initialKnowledge, dbSchema]);
+  }, [isOpen, initialKnowledge, dbSchema, activeTab]);
 
   const loadCameras = async () => {
       setCameraLoading(true);
@@ -57,6 +59,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
         }
       } catch (e) {
           console.error("Camera Load Error", e);
+          // Don't show error toast here, just UI
       } finally {
           setCameraLoading(false);
       }
@@ -78,16 +81,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
     setIsSaving(true);
     setStatusMessage(null);
     try {
-      // 1. 심화 학습 내용 저장
       await saveKnowledge(knowledge);
-      
-      // 2. DB 스키마 저장
       await saveDbSchema(localDbSchema);
-      setDbSchema(localDbSchema); // 부모 컴포넌트 상태 업데이트
+      setDbSchema(localDbSchema); 
 
       showStatus('success', "모든 설정이 브라우저(IndexedDB)에 저장되었습니다.");
       
-      // 약간의 지연 후 데이터 리로드 트리거
       setTimeout(() => {
           onDataSaved();
       }, 500);
@@ -138,7 +137,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
             showStatus('success', '데이터가 성공적으로 복원되었습니다. 잠시 후 갱신됩니다.');
             
             setTimeout(() => {
-                onDataSaved(); // 앱 상태 리로드
+                onDataSaved(); 
                 onClose();
             }, 1500);
         } catch (error: any) {
@@ -149,7 +148,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
         showStatus('error', '파일 읽기 중 오류가 발생했습니다.');
     };
     reader.readAsText(file);
-    if(event.target) event.target.value = ''; // Reset input
+    if(event.target) event.target.value = ''; 
   };
 
   if (!isOpen) return null;
@@ -305,9 +304,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
                              <button 
                                 onClick={handleCameraSave}
                                 disabled={!selectedCameraId}
-                                className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 text-sm font-bold shadow-md disabled:opacity-50"
+                                className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 text-sm font-bold shadow-md disabled:opacity-50 flex items-center gap-2"
                              >
-                                설정 저장
+                                <CheckCircle className="w-4 h-4" /> 설정 저장
                              </button>
                           </div>
                       </div>

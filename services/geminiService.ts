@@ -2,11 +2,9 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
 const getAiClient = () => {
-  // 브라우저(Vite) 환경에서 process.env 접근 시 크래시 방지
   const apiKey = (typeof process !== 'undefined' && process.env) ? process.env.API_KEY : '';
-  
   if (!apiKey) {
-    console.warn("API Key is missing or not accessible in this environment.");
+    console.warn("API Key is missing.");
   }
   return new GoogleGenAI({ apiKey: apiKey || 'DUMMY_KEY_FOR_UI_RENDERING' });
 };
@@ -23,24 +21,34 @@ export const generateSqlFromNaturalLanguage = async (
         return "-- API Key not configured. Please check Vercel Environment Variables.";
     }
 
-    // 현재 날짜 및 연월 계산 (YYYYMMDD, YYMM)
+    // 1. 대한민국 표준시(KST) 기준 날짜 계산
     const now = new Date();
-    const year = now.getFullYear();
-    const month = (now.getMonth() + 1).toString().padStart(2, '0');
-    const day = now.getDate().toString().padStart(2, '0');
-    const yymm = `${year.toString().substring(2)}${month}`;
-    const yyyymmdd = `${year}${month}${day}`;
+    const kstOptions: Intl.DateTimeFormatOptions = { 
+        timeZone: 'Asia/Seoul', 
+        year: 'numeric', 
+        month: '2-digit', 
+        day: '2-digit' 
+    };
+    const kstDateParts = new Intl.DateTimeFormat('en-CA', kstOptions).formatToParts(now);
+    // en-CA format is usually YYYY-MM-DD, but let's be safe with parts
+    const year = kstDateParts.find(p => p.type === 'year')?.value || '';
+    const month = kstDateParts.find(p => p.type === 'month')?.value || '';
+    const day = kstDateParts.find(p => p.type === 'day')?.value || '';
 
-    const dateContext = `[System Context]
-Current Date: ${yyyymmdd} (Format: YYYYMMDD)
-Current Month Suffix: ${yymm} (Format: YYMM for table names like outm_${yymm})`;
+    const yymm = `${year.substring(2)}${month}`; // 2505
+    const yyyymmdd = `${year}${month}${day}`;   // 20250520
 
-    // 동적 스키마(DB에서 긁어온 것)
+    // 2. 시스템 컨텍스트 강화: 구체적인 테이블 이름 주입
+    const dateContext = `[System Context - TIMEZONE: KST (Korea Standard Time)]
+- Today's Date: ${yyyymmdd} (Format: YYYYMMDD)
+- Current Month Suffix: ${yymm}
+- **Real-time Sales Table for Today**: outd_${yymm} (Detail) OR outm_${yymm} (Master)
+- **Instruction**: When asked for "Today", "Now", or "Real-time", YOU MUST USE 'outd_${yymm}' or 'outm_${yymm}'. DO NOT look for other tables.`;
+
     const schemaPart = schemaContext 
       ? `[Target Database Schema]\n${schemaContext}` 
-      : `[Default Schema]\nTable 'Users': id, name, email...`;
+      : `[Default Schema]\n(No schema loaded)`;
 
-    // 사용자 정의 지식(IndexedDB에서 불러온 것)
     const knowledgePart = customKnowledge
       ? `[Business Rules & Custom Knowledge]\n${customKnowledge}`
       : ``;
@@ -49,19 +57,18 @@ Current Month Suffix: ${yymm} (Format: YYMM for table names like outm_${yymm})`;
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
-      contents: `Convert the following natural language request into a Microsoft SQL Server (T-SQL) query. 
+      contents: `Convert the natural language request into a Microsoft SQL Server (T-SQL) query.
       
       ${fullContext}
       
       Instructions:
-      - Use the provided Schema and Business Rules strictly.
-      - If specific codes (e.g., 'sale_status=9') are defined in Business Rules, apply them to filter data.
-      - Use the Current Month Suffix for table names (e.g., outm_${yymm}) unless a specific date is requested.
-      - Only return the raw SQL string, no markdown formatting, no explanation.
+      1. **Strictly** follow the table naming convention: outd_${yymm} for sales details.
+      2. For "Today's Sales", use: SELECT ISNULL(SUM(money1vat1dc), 0) FROM outd_${yymm} WHERE day1 = '${yyyymmdd}' AND sale_status != '9'
+      3. Do not use markdown formatting. Return only the SQL string.
       
       Request: ${prompt}`,
       config: {
-        systemInstruction: "You are an expert SQL database administrator for Winpos3. Output only valid T-SQL.",
+        systemInstruction: "You are an expert SQL developer for Winpos3. You prioritize real-time data tables (outd_YYMM) over closed tables.",
         thinkingConfig: { thinkingBudget: 0 } 
       }
     });
@@ -71,45 +78,35 @@ Current Month Suffix: ${yymm} (Format: YYMM for table names like outm_${yymm})`;
     return sql;
   } catch (error) {
     console.error("Gemini SQL Generation Error:", error);
-    return "SELECT * FROM outm_yymm -- Error: API Key invalid or Quota exceeded";
+    return "SELECT 'Error generating query' as Status";
   }
 };
 
 export const analyzeQueryResult = async (data: any[]): Promise<string> => {
   if (!data || data.length === 0) {
-    return "실행 결과 데이터가 없습니다.";
+    return "조회된 데이터가 없습니다.";
   }
 
   try {
     const ai = getAiClient();
-    if (ai.apiKey === 'DUMMY_KEY_FOR_UI_RENDERING') {
-      return ""; // Don't show an error, just return empty.
-    }
-    const dataPreview = JSON.stringify(data.slice(0, 5)); // Send a preview to save tokens
+    if (ai.apiKey === 'DUMMY_KEY_FOR_UI_RENDERING') return "";
+
+    const dataPreview = JSON.stringify(data.slice(0, 5)); 
 
     const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
-        contents: `Analyze the following JSON data which is a result of a SQL query. Provide a concise, one-sentence summary for a business user in Korean. Be friendly and direct.
+        contents: `Analyze this JSON data (SQL result) and provide a very short, friendly business insight in Korean.
         
-        Example summaries:
-        - "5월 총 매출은 1,234,567원입니다."
-        - "재고가 10개 미만인 상품이 3개 있습니다."
-        - "가장 많이 팔린 상품은 '신라면'입니다."
-
-        Do not mention the JSON format. Do not explain the columns. Just provide the key insight.
-
-        Data:
-        ${dataPreview}
+        Data: ${dataPreview}
         `,
         config: {
-            systemInstruction: "You are a helpful data analyst who provides quick insights in Korean.",
+            systemInstruction: "You are a friendly data analyst. Answer in Korean.",
             thinkingConfig: { thinkingBudget: 0 } 
         }
     });
 
-    return response.text || "결과를 분석하는 데 실패했습니다.";
+    return response.text || "결과 분석 불가";
   } catch (error) {
-    console.error("Gemini Data Analysis Error:", error);
-    return "결과를 분석하는 중 오류가 발생했습니다.";
+    return "분석 중 오류 발생";
   }
 };
