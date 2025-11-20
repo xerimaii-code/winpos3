@@ -48,9 +48,7 @@ export const DeploymentGuide: React.FC = () => {
     "react-dom": "^18.2.0",
     "lucide-react": "^0.344.0",
     "@google/genai": "^1.30.0",
-    "mssql": "^10.0.1"
-  },
-  "devDependencies": {
+    "mssql": "^10.0.1",
     "@types/react": "^18.2.64",
     "@types/react-dom": "^18.2.21",
     "@vitejs/plugin-react": "^4.2.1",
@@ -141,10 +139,10 @@ export default async function handler(req, res) {
     const result = await pool.request().query(query);
     await pool.close();
     
-    // apiVersion 필드 추가 (배포 버전 확인용 v5.0)
+    // apiVersion 필드 추가 (배포 버전 확인용 v5.1)
     res.status(200).json({ 
       data: result.recordset,
-      apiVersion: 'v5.0 (Backend Updated)'
+      apiVersion: 'v5.1 (Backend Updated)'
     });
     
   } catch (error) {
@@ -153,7 +151,7 @@ export default async function handler(req, res) {
       error: 'Database Error', 
       details: error.message, 
       code: error.code,
-      apiVersion: 'v5.0 (Backend Updated)'
+      apiVersion: 'v5.1 (Backend Updated)'
     });
   }
 }`;
@@ -240,7 +238,7 @@ export default async function handler(req, res) {
       <section className="space-y-4">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center font-bold text-white">3</div>
-          <h3 className="text-xl font-semibold text-white">Vercel 환경변수 설정 (Settings > Environment Variables)</h3>
+          <h3 className="text-xl font-semibold text-white">Vercel 환경변수 설정 (Settings &gt; Environment Variables)</h3>
         </div>
         
         <div className="bg-purple-900/20 border border-purple-500/30 rounded-xl p-6 ml-4">

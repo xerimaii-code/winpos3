@@ -13,9 +13,7 @@
     "react-dom": "^18.2.0",
     "lucide-react": "^0.344.0",
     "@google/genai": "^1.30.0",
-    "mssql": "^10.0.1"
-  },
-  "devDependencies": {
+    "mssql": "^10.0.1",
     "@types/react": "^18.2.64",
     "@types/react-dom": "^18.2.21",
     "@vitejs/plugin-react": "^4.2.1",

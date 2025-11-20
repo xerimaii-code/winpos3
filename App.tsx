@@ -11,12 +11,12 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>(Tab.SIMULATOR);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 selection:bg-emerald-500/30">
+    <div className="min-h-screen bg-slate-950 text-slate-200 selection:bg-blue-500/30">
       {/* Header */}
       <header className="sticky top-0 z-50 backdrop-blur-lg bg-slate-950/80 border-b border-slate-800">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-emerald-600 p-2 rounded-lg shadow-lg shadow-emerald-500/20">
+            <div className="bg-blue-600 p-2 rounded-lg shadow-lg shadow-blue-500/20">
               <Database className="w-6 h-6 text-white" />
             </div>
             <div>
@@ -24,8 +24,8 @@ const App: React.FC = () => {
                 MS SQL Connector
               </h1>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-mono text-white bg-emerald-600/80 px-2 py-0.5 rounded border border-emerald-500 shadow-sm">
-                  Frontend v5.0
+                <span className="text-xs font-mono text-white bg-blue-600/80 px-2 py-0.5 rounded border border-blue-500 shadow-sm">
+                  Frontend v5.1
                 </span>
               </div>
             </div>
@@ -47,7 +47,7 @@ const App: React.FC = () => {
               onClick={() => setActiveTab(Tab.SIMULATOR)}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
                 activeTab === Tab.SIMULATOR 
-                  ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-500/20' 
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20' 
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
               }`}
             >
