@@ -12,6 +12,7 @@ export const DEFAULT_KNOWLEDGE = `[Winpos3 Database Schema & Business Rules]
 1. 판매/출고 (Sales/Outbound)
 - outm_YYMM (월별 판매 마스터): junno(PK,전표번호), day1(날짜), posno(포스번호), memberno(회원번호), tmamoney1(총매출), tmoneydc(할인), sale_status(판매구분)
 - outd_YYMM (월별 판매 상세): scancode(PK), junno(FK), barcode(상품코드), mitemcount(수량), money1(단가), money1vat1dc(실판매액)
+- 특징: outd_YYMM 및 outm_YYMM 테이블은 마감 여부와 관계없이 현재 날짜(Today)의 실시간 매출 데이터를 포함하고 있습니다.
 - cancel_parts: 취소된 상품 거래 상세
 - 주의: sale_status '0'=정상, '1'=반품, '9'=연습(집계제외)
 
@@ -41,6 +42,7 @@ export const DEFAULT_KNOWLEDGE = `[Winpos3 Database Schema & Business Rules]
 
 7. 핵심 로직 가이드
 - 모든 _YYMM 테이블은 월별 파티션입니다 (예: outm_2310). 쿼리 시 적절한 월 테이블을 선택하세요.
+- '오늘 매출', '실시간 매출', '현재 매출' 조회 시 반드시 outd_YYMM 또는 outm_YYMM 테이블을 사용해야 합니다. (마감 테이블 아님)
 - 매출 조회 시 'sale_status=9' (연습모드)는 반드시 제외해야 합니다.
 - 재고(curjago)는 실시간으로 변동되므로 parts 테이블을 조회합니다.
 `;

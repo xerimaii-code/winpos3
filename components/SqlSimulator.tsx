@@ -4,8 +4,9 @@ import { Search, Database, Loader2, Code, Activity, XCircle, Settings, ChevronDo
 import { generateSqlFromNaturalLanguage, analyzeQueryResult } from '../services/geminiService';
 import { QueryResult } from '../types';
 import { SettingsModal } from './SettingsModal';
-import { getKnowledge, saveQueryHistory, getDbSchema, saveDbSchema } from '../utils/db'; // saveDbSchema import 추가
+import { getKnowledge, saveQueryHistory, getDbSchema, saveDbSchema } from '../utils/db';
 import { QueryHistoryModal } from './QueryHistoryModal';
+import { BarcodeScannerModal } from './BarcodeScannerModal'; // Import 추가
 import { MOCK_USERS, DEFAULT_KNOWLEDGE } from '../constants';
 
 export const SqlSimulator: React.FC = () => {
@@ -22,6 +23,7 @@ export const SqlSimulator: React.FC = () => {
   
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false); // 스캐너 상태 추가
   const [customKnowledge, setCustomKnowledge] = useState<string>('');
 
   const [showSql, setShowSql] = useState(false);
@@ -227,6 +229,14 @@ export const SqlSimulator: React.FC = () => {
     setIsHistoryOpen(false);
   };
 
+  // 바코드 스캔 완료 핸들러
+  const handleScanComplete = (decodedText: string) => {
+    setInput(decodedText);
+    setIsScannerOpen(false);
+    // 옵션: 스캔 후 바로 검색하려면 아래 주석 해제
+    // handleSimulate(undefined); 
+  };
+
   const getStatusIndicator = () => {
     const totalLoading = loading || isAnalyzing;
     if (totalLoading) return (
@@ -267,6 +277,11 @@ export const SqlSimulator: React.FC = () => {
         onClose={() => setIsHistoryOpen(false)}
         onUseQuery={handleUseQuery}
       />
+      <BarcodeScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScan={handleScanComplete}
+      />
 
       <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4 sticky top-16 z-30">
         <div className="flex items-center justify-between gap-2 mb-4">
@@ -294,7 +309,14 @@ export const SqlSimulator: React.FC = () => {
                 )}
             </div>
         </div>
-        <div className="flex gap-2 mt-3"><button onClick={() => handleSimulate()} disabled={loading || isAnalyzing} className="flex-1 bg-rose-600 hover:bg-rose-700 text-white py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 disabled:opacity-70 disabled:active:scale-100">{loading || isAnalyzing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5 fill-current" />} {loading ? '실행 중...' : (isAnalyzing ? '분석 중...' : '실행')}</button><button onClick={() => alert("Barcode scanning not yet implemented.")} className="flex-1 bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md active:scale-95"><ScanBarcode className="w-5 h-5" /> SCAN</button></div>
+        <div className="flex gap-2 mt-3">
+            <button onClick={() => handleSimulate()} disabled={loading || isAnalyzing} className="flex-1 bg-rose-600 hover:bg-rose-700 text-white py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 disabled:opacity-70 disabled:active:scale-100">
+                {loading || isAnalyzing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5 fill-current" />} {loading ? '실행 중...' : (isAnalyzing ? '분석 중...' : '실행')}
+            </button>
+            <button onClick={() => setIsScannerOpen(true)} className="flex-1 bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md active:scale-95">
+                <ScanBarcode className="w-5 h-5" /> SCAN
+            </button>
+        </div>
       </div>
       {result && (
         <div className="space-y-4 animate-fade-in">
