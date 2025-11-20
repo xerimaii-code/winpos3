@@ -47,7 +47,7 @@ export const SqlSimulator: React.FC = () => {
 
       const json = await response.json();
       
-      // 백엔드 버전 확인 로직 (v5.5)
+      // 백엔드 버전 확인 로직 (v5.6)
       if (json.apiVersion) {
         setBackendVersion(json.apiVersion);
       } else {
@@ -179,7 +179,7 @@ export const SqlSimulator: React.FC = () => {
       <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-6">
           <div className="flex items-start gap-4">
-            <div className="p-3 bg-violet-600/20 text-violet-400 rounded-lg">
+            <div className="p-3 bg-teal-600/20 text-teal-400 rounded-lg">
               <Sparkles className="w-6 h-6" />
             </div>
             <div>
@@ -197,7 +197,7 @@ export const SqlSimulator: React.FC = () => {
               <button
                 onClick={handleTestConnection}
                 disabled={testLoading}
-                className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-violet-500/30 bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 transition-all text-sm font-medium whitespace-nowrap"
+                className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-teal-500/30 bg-teal-500/10 text-teal-400 hover:bg-teal-500/20 transition-all text-sm font-medium whitespace-nowrap"
               >
                 {testLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
                 {testLoading ? '접속 중...' : '연결 테스트'}
@@ -224,19 +224,19 @@ export const SqlSimulator: React.FC = () => {
 
         {/* Connection Status Big Banner */}
         {useRealApi && connectionStatus === 'success' && (
-            <div className="mb-6 bg-violet-900/20 border border-violet-500/50 rounded-lg p-4 flex flex-col md:flex-row md:items-center gap-4 animate-fade-in">
-                <div className="p-3 bg-violet-500/20 rounded-full text-violet-400 self-start md:self-center">
+            <div className="mb-6 bg-teal-900/20 border border-teal-500/50 rounded-lg p-4 flex flex-col md:flex-row md:items-center gap-4 animate-fade-in">
+                <div className="p-3 bg-teal-500/20 rounded-full text-teal-400 self-start md:self-center">
                     <Server className="w-6 h-6" />
                 </div>
                 <div className="flex-1">
-                    <h4 className="text-violet-300 font-bold text-lg flex items-center gap-2">
+                    <h4 className="text-teal-300 font-bold text-lg flex items-center gap-2">
                         Connected to: <span className="text-white underline underline-offset-4">{connectedDbName}</span>
                     </h4>
-                    <p className="text-violet-400/70 text-xs font-mono mt-1">{connectionMsg}</p>
+                    <p className="text-teal-400/70 text-xs font-mono mt-1">{connectionMsg}</p>
                 </div>
                 <div className="bg-slate-950 px-3 py-2 rounded border border-slate-700 text-right">
                     <div className="text-[10px] uppercase text-slate-500 font-bold">API Status</div>
-                    <div className={`text-sm font-mono ${backendVersion.includes('v5.5') ? 'text-violet-400' : 'text-red-400'}`}>
+                    <div className={`text-sm font-mono ${backendVersion.includes('v5.6') ? 'text-teal-400' : 'text-red-400'}`}>
                         {backendVersion}
                     </div>
                 </div>
@@ -269,13 +269,13 @@ export const SqlSimulator: React.FC = () => {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSimulate()}
             placeholder={useRealApi ? `[${connectedDbName || 'DB'}]에 쿼리 요청 (예: 모든 테이블 보여줘)` : "예: '관리자(Admin) 권한을 가진 사용자 보여줘'"}
-            className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg py-4 pl-12 pr-24 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all"
+            className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg py-4 pl-12 pr-24 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition-all"
           />
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 w-5 h-5" />
           <button
             onClick={handleSimulate}
             disabled={loading || !input.trim()}
-            className="absolute right-2 top-1/2 -translate-y-1/2 bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="absolute right-2 top-1/2 -translate-y-1/2 bg-teal-600 hover:bg-teal-500 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
             실행
@@ -287,17 +287,17 @@ export const SqlSimulator: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
           <div className="bg-slate-900 rounded-xl border border-slate-700 overflow-hidden flex flex-col">
             <div className="bg-slate-800 px-4 py-3 border-b border-slate-700 flex items-center gap-2">
-              <Code className="w-4 h-4 text-violet-400" />
+              <Code className="w-4 h-4 text-teal-400" />
               <span className="text-sm font-mono text-slate-300">Generated T-SQL</span>
             </div>
-            <div className="p-4 font-mono text-sm text-violet-300 overflow-auto flex-1 whitespace-pre-wrap">
+            <div className="p-4 font-mono text-sm text-teal-300 overflow-auto flex-1 whitespace-pre-wrap">
               {result.sql}
             </div>
           </div>
 
           <div className="bg-slate-900 rounded-xl border border-slate-700 overflow-hidden flex flex-col">
             <div className="bg-slate-800 px-4 py-3 border-b border-slate-700 flex items-center gap-2">
-              <Database className="w-4 h-4 text-violet-400" />
+              <Database className="w-4 h-4 text-teal-400" />
               <span className="text-sm font-mono text-slate-300">
                 {result.error ? 'Error' : `Result Data (${result.data.length} rows)`}
               </span>

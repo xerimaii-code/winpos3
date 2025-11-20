@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileJson, Server, Terminal, CheckCircle2, Copy, AlertTriangle, Settings, FileCode, Key } from 'lucide-react';
+import { FileJson, Server, Terminal, CheckCircle2, Copy, AlertTriangle, Settings, FileCode, Key, ExternalLink } from 'lucide-react';
 
 export const DeploymentGuide: React.FC = () => {
   const [copied, setCopied] = useState<string | null>(null);
@@ -139,10 +139,10 @@ export default async function handler(req, res) {
     const result = await pool.request().query(query);
     await pool.close();
     
-    // apiVersion 필드 추가 (배포 버전 확인용 v5.5)
+    // apiVersion 필드 추가 (배포 버전 확인용 v5.6)
     res.status(200).json({ 
       data: result.recordset,
-      apiVersion: 'v5.5 (Backend Updated)'
+      apiVersion: 'v5.6 (Backend Updated)'
     });
     
   } catch (error) {
@@ -151,7 +151,7 @@ export default async function handler(req, res) {
       error: 'Database Error', 
       details: error.message, 
       code: error.code,
-      apiVersion: 'v5.5 (Backend Updated)'
+      apiVersion: 'v5.6 (Backend Updated)'
     });
   }
 }`;
@@ -159,7 +159,7 @@ export default async function handler(req, res) {
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-fade-in pb-12">
       <div className="text-center space-y-2 mb-10">
-        <h2 className="text-3xl font-bold text-white">Vercel 배포 최종 가이드 (v5.5)</h2>
+        <h2 className="text-3xl font-bold text-white">Vercel 배포 최종 가이드 (v5.6)</h2>
         <p className="text-slate-400">
           아래 4개 파일을 프로젝트에 생성하고, Vercel 환경변수를 설정하면 배포가 완료됩니다.
         </p>
@@ -238,20 +238,30 @@ export default async function handler(req, res) {
       <section className="space-y-4">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center font-bold text-white">3</div>
-          {/* HTML 엔티티로 부등호(>)를 치환하여 JSX 파싱 에러 해결 */}
           <h3 className="text-xl font-semibold text-white">Vercel 환경변수 설정 (Settings &gt; Environment Variables)</h3>
         </div>
         
         <div className="bg-purple-900/20 border border-purple-500/30 rounded-xl p-6 ml-4">
             <div className="grid grid-cols-1 gap-3 text-sm">
-              <div className="flex items-center justify-between bg-slate-900/80 p-4 rounded-lg border border-slate-700 border-l-4 border-l-yellow-500">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between bg-slate-900/80 p-4 rounded-lg border border-slate-700 border-l-4 border-l-yellow-500 gap-4">
                 <div>
                   <span className="block font-mono text-yellow-400 font-bold mb-1 flex items-center gap-2">
                     <Key className="w-4 h-4" /> API_KEY
                   </span>
-                  <span className="text-slate-500 text-xs">Google Gemini API Key (필수)</span>
+                  <span className="text-slate-500 text-xs">Google Gemini API Key (필수, AIza로 시작)</span>
                 </div>
-                <code className="bg-slate-800 px-3 py-1 rounded text-slate-400 border border-slate-600">AIzaSy...</code>
+                <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3">
+                   <code className="bg-slate-800 px-3 py-1 rounded text-slate-400 border border-slate-600 whitespace-nowrap">AIzaSy...</code>
+                   <a 
+                    href="https://aistudio.google.com/app/apikey" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 bg-yellow-600 hover:bg-yellow-500 text-white px-3 py-1.5 rounded text-xs font-bold transition-colors"
+                   >
+                     <ExternalLink className="w-3 h-3" />
+                     키 발급받기
+                   </a>
+                </div>
               </div>
 
               <div className="flex items-center justify-between bg-slate-900/80 p-4 rounded-lg border border-slate-700">

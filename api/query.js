@@ -5,7 +5,7 @@ const config = {
   password: process.env.DB_PASSWORD,
   server: process.env.DB_SERVER,
   port: parseInt(process.env.DB_PORT || '1433', 10),
-  // 수정됨: 사용자가 설정한 환경변수 DB_NAME을 최우선으로 사용 (winpos3)
+  // 우선순위: DB_NAME(사용자 설정) > DB_DATABASE > 기본값(winpos3)
   database: process.env.DB_NAME || process.env.DB_DATABASE || 'winpos3',
   options: {
     encrypt: process.env.DB_ENCRYPT === 'true', 
@@ -44,10 +44,10 @@ export default async function handler(req, res) {
     const result = await pool.request().query(query);
     await pool.close();
     
-    // apiVersion 필드 추가 (배포 버전 확인용 v5.5)
+    // apiVersion 필드 추가 (배포 버전 확인용 v5.6)
     res.status(200).json({ 
       data: result.recordset,
-      apiVersion: 'v5.5 (Backend Updated)'
+      apiVersion: 'v5.6 (Backend Updated)'
     });
     
   } catch (error) {
@@ -56,7 +56,7 @@ export default async function handler(req, res) {
       error: 'Database Error', 
       details: error.message, 
       code: error.code,
-      apiVersion: 'v5.5 (Backend Updated)'
+      apiVersion: 'v5.6 (Backend Updated)'
     });
   }
 }
