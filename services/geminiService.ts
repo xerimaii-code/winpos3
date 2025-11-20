@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI, Type } from "@google/genai";
 
 const getAiClient = () => {
@@ -30,20 +31,19 @@ export const generateSqlFromNaturalLanguage = async (
         day: '2-digit' 
     };
     const kstDateParts = new Intl.DateTimeFormat('en-CA', kstOptions).formatToParts(now);
-    // en-CA format is usually YYYY-MM-DD, but let's be safe with parts
     const year = kstDateParts.find(p => p.type === 'year')?.value || '';
     const month = kstDateParts.find(p => p.type === 'month')?.value || '';
     const day = kstDateParts.find(p => p.type === 'day')?.value || '';
 
     const yymm = `${year.substring(2)}${month}`; // 2505
-    const yyyymmdd = `${year}${month}${day}`;   // 20250520
+    const yyyymmdd_hyphen = `${year}-${month}-${day}`;   // 2025-05-20
 
-    // 2. 시스템 컨텍스트 강화: 구체적인 테이블 이름 주입
+    // 2. 시스템 컨텍스트 강화: 구체적인 테이블 이름과 날짜 형식 주입
     const dateContext = `[System Context - TIMEZONE: KST (Korea Standard Time)]
-- Today's Date: ${yyyymmdd} (Format: YYYYMMDD)
+- Today's Date: ${yyyymmdd_hyphen} (Format: YYYY-MM-DD)
 - Current Month Suffix: ${yymm}
-- **Real-time Sales Table for Today**: outd_${yymm} (Detail) OR outm_${yymm} (Master)
-- **Instruction**: When asked for "Today", "Now", or "Real-time", YOU MUST USE 'outd_${yymm}' or 'outm_${yymm}'. DO NOT look for other tables.`;
+- **Real-time Sales Table for Today**: outm_${yymm} (This is the MASTER table for sales summaries)
+- **Instruction**: For questions about "Today", "Now", or "Real-time" sales totals, YOU MUST USE 'outm_${yymm}'. Use the YYYY-MM-DD date format. DO NOT look for other tables.`;
 
     const schemaPart = schemaContext 
       ? `[Target Database Schema]\n${schemaContext}` 
@@ -62,13 +62,13 @@ export const generateSqlFromNaturalLanguage = async (
       ${fullContext}
       
       Instructions:
-      1. **Strictly** follow the table naming convention: outd_${yymm} for sales details.
-      2. For "Today's Sales", use: SELECT ISNULL(SUM(money1vat1dc), 0) FROM outd_${yymm} WHERE day1 = '${yyyymmdd}' AND sale_status != '9'
+      1. **Strictly** follow the table naming convention: outm_${yymm} for real-time sales summaries.
+      2. For "Today's Sales", use: SELECT ISNULL(SUM(tmamoney1), 0) FROM outm_${yymm} WHERE day1 = '${yyyymmdd_hyphen}' AND sale_status != '9'
       3. Do not use markdown formatting. Return only the SQL string.
       
       Request: ${prompt}`,
       config: {
-        systemInstruction: "You are an expert SQL developer for Winpos3. You prioritize real-time data tables (outd_YYMM) over closed tables.",
+        systemInstruction: "You are an expert SQL developer for Winpos3. You prioritize real-time data tables (outm_YYMM) for sales summaries.",
         thinkingConfig: { thinkingBudget: 0 } 
       }
     });

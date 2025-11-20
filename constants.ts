@@ -1,4 +1,5 @@
 
+
 export const MOCK_USERS = [
   { id: 1, name: "김철수", email: "chulsoo@example.com", role: "Admin", lastLogin: "2023-10-25" },
   { id: 2, name: "이영희", email: "younghee@test.co.kr", role: "User", lastLogin: "2023-10-24" },
@@ -9,11 +10,9 @@ export const MOCK_USERS = [
 
 export const DEFAULT_KNOWLEDGE = `[Winpos3 Database Schema & Business Rules]
 
-1. 판매/출고 (Sales/Outbound) - **실시간/현재 매출 핵심**
-- **outd_YYMM** (월별 판매 상세): scancode(PK), junno(FK), barcode(상품코드), mitemcount(수량), money1(단가), money1vat1dc(실판매액)
-- **outm_YYMM** (월별 판매 마스터): junno(PK), day1(날짜), posno(포스번호), memberno(회원번호), tmamoney1(총매출), tmoneydc(할인), sale_status(판매구분)
-- **규칙 1**: **'오늘', '현재', '지금', '실시간'** 매출을 물으면 **무조건** 'outd_YYMM' 테이블을 사용하세요. (마감 테이블 아님!)
-- **규칙 2**: 마감되었는지 여부는 중요하지 않습니다. 현재 월의 데이터는 모두 여기 있습니다.
+1. 판매/출고 (Sales/Outbound)
+- **outm_YYMM** (월별 판매 마스터): junno(PK), day1(날짜), posno(포스번호), memberno(회원번호), tmamoney1(총매출), tmoneydc(할인), sale_status(판매구분) -> **핵심 매출 요약 테이블**
+- **outd_YYMM** (월별 판매 상세): scancode(PK), junno(FK), barcode(상품코드), mitemcount(수량), money1(단가), money1vat1dc(실판매액) -> **개별 상품 판매 내역**
 
 2. 구매/입고
 - ipgom_YYMM, ipgod_YYMM
@@ -24,17 +23,18 @@ export const DEFAULT_KNOWLEDGE = `[Winpos3 Database Schema & Business Rules]
 
 4. 핵심 로직 가이드 (CRITICAL RULES)
 - **시간 기준**: 모든 날짜와 시간은 **대한민국 표준시(KST)** 기준입니다.
-- **테이블 접미사**: 테이블 이름 뒤의 _YYMM은 현재 한국 시간 기준 연월입니다. (예: 한국이 5월이면 outd_2505)
-- **오늘 매출 쿼리 작성법**:
+- **테이블 접미사**: 테이블 이름 뒤의 _YYMM은 현재 한국 시간 기준 연월입니다. (예: 한국이 5월이면 outm_2505)
+- **오늘/실시간 매출 쿼리 규칙 (!!가장 중요!!)**:
+  - **'오늘', '현재', '지금', '실시간'** 등 현시점을 의미하는 단어가 포함된 매출 관련 질문은 **무조건 'outm_YYMM' 테이블**을 사용해야 합니다.
+  - 날짜 조건 형식은 반드시 **'YYYY-MM-DD'** 입니다. (예: WHERE day1 = '2025-05-20')
+  - 'outd_YYMM'은 개별 품목 조회 시에만 사용하고, 총 매출 집계는 'outm_YYMM'을 사용하세요.
   - 절대 별도의 '마감(close)', 'history' 테이블을 찾지 마세요.
-  - **outd_YYMM** 테이블을 조회하세요.
-  - 조건: WHERE day1 = '{TodayYYYYMMDD}' AND sale_status != '9'
-  - 연습모드('9')는 항상 제외해야 합니다.
+  - 연습모드('9')는 항상 제외해야 합니다. (WHERE sale_status != '9')
 
 5. 자주 묻는 질문 예시 (Example SQL)
 - Q: "오늘 매출 얼마야?"
-  A: SELECT ISNULL(SUM(money1vat1dc), 0) as TodaySales FROM outd_{CurrentYYMM} WHERE day1 = '{CurrentYYYYMMDD}' AND sale_status != '9'
+  A: SELECT ISNULL(SUM(tmamoney1), 0) as TodaySales FROM outm_{CurrentYYMM} WHERE day1 = '{CurrentYYYY-MM-DD}' AND sale_status != '9'
 
 - Q: "지금 제일 많이 팔린 상품?"
-  A: SELECT TOP 5 barcode, SUM(mitemcount) as Qty FROM outd_{CurrentYYMM} WHERE day1 = '{CurrentYYYYMMDD}' AND sale_status != '9' GROUP BY barcode ORDER BY Qty DESC
+  A: SELECT TOP 5 p.descr, SUM(d.mitemcount) as Qty FROM outd_{CurrentYYMM} d JOIN parts p ON d.barcode = p.barcode WHERE d.day1 = '{CurrentYYYY-MM-DD}' AND d.sale_status != '9' GROUP BY p.descr ORDER BY Qty DESC
 `;
