@@ -5,7 +5,7 @@ import { MOCK_USERS } from '../constants';
 import { generateSqlFromNaturalLanguage } from '../services/geminiService';
 import { QueryResult } from '../types';
 import { SettingsModal } from './SettingsModal';
-import { getKnowledge, getDeviceSetting } from '../utils/db';
+import { getGitUrl } from '../utils/db';
 
 export const SqlSimulator: React.FC = () => {
   const [input, setInput] = useState('');
@@ -22,20 +22,33 @@ export const SqlSimulator: React.FC = () => {
   // 설정 모달 관련
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [customKnowledge, setCustomKnowledge] = useState<string>('');
-  const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
 
   // 결과창 접기/펴기 (SQL 영역)
   const [showSql, setShowSql] = useState(false);
 
-  // 초기 로드: IndexedDB에서 학습 내용 & 설정 가져오기
-  useEffect(() => {
-    getKnowledge().then(saved => {
-      if (saved) setCustomKnowledge(saved);
-    });
-    getDeviceSetting('selectedCameraId').then(id => {
-      if (id) setSelectedCameraId(id);
-    });
+  // 초기 로드: Git URL에서 학습 내용 가져오기
+  const loadKnowledgeFromGit = useCallback(async () => {
+    const url = await getGitUrl();
+    if (url) {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error('Failed to fetch from Git URL');
+        const text = await response.text();
+        setCustomKnowledge(text);
+        console.log("Knowledge loaded from Git.");
+      } catch (error) {
+        console.error("Failed to load knowledge from Git:", error);
+        setCustomKnowledge(''); // 실패 시 초기화
+      }
+    } else {
+        setCustomKnowledge(''); // URL 없으면 초기화
+    }
   }, []);
+
+  useEffect(() => {
+    loadKnowledgeFromGit();
+  }, [loadKnowledgeFromGit]);
+
 
   const handleTestConnection = useCallback(async () => {
     if (!useRealApi) return;
@@ -81,20 +94,19 @@ export const SqlSimulator: React.FC = () => {
         setConnectedDbName(dbName);
         setConnectionMsg(`Server: ${serverVersion}...`);
         
-        // 스키마 상세 조회 (PK, 타입 포함)
         const schemaQuery = `
             SELECT 
-                t.TABLE_NAME, 
-                c.COLUMN_NAME, 
-                c.DATA_TYPE,
+                t.TABLE_NAME, c.COLUMN_NAME, c.DATA_TYPE,
                 c.CHARACTER_MAXIMUM_LENGTH,
-                k.CONSTRAINT_TYPE
+                CASE WHEN k.CONSTRAINT_TYPE = 'PRIMARY KEY' THEN 'YES' ELSE 'NO' END as IS_PRIMARY_KEY
             FROM INFORMATION_SCHEMA.TABLES t
             JOIN INFORMATION_SCHEMA.COLUMNS c ON t.TABLE_NAME = c.TABLE_NAME
-            LEFT JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu 
-                ON c.TABLE_NAME = kcu.TABLE_NAME AND c.COLUMN_NAME = kcu.COLUMN_NAME
-            LEFT JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS k 
-                ON kcu.CONSTRAINT_NAME = k.CONSTRAINT_NAME AND k.CONSTRAINT_TYPE = 'PRIMARY KEY'
+            LEFT JOIN (
+                SELECT kcu.TABLE_NAME, kcu.COLUMN_NAME, tc.CONSTRAINT_TYPE
+                FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+                JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc 
+                ON kcu.CONSTRAINT_NAME = tc.CONSTRAINT_NAME AND tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
+            ) k ON c.TABLE_NAME = k.TABLE_NAME AND c.COLUMN_NAME = k.COLUMN_NAME
             WHERE t.TABLE_TYPE = 'BASE TABLE'
             ORDER BY t.TABLE_NAME, c.ORDINAL_POSITION
         `;
@@ -103,7 +115,6 @@ export const SqlSimulator: React.FC = () => {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ query: schemaQuery }),
-            signal: controller.signal
         });
 
         if (schemaResponse.ok) {
@@ -116,7 +127,7 @@ export const SqlSimulator: React.FC = () => {
                     schemaMap[row.TABLE_NAME] = [];
                 }
                 const typeInfo = row.CHARACTER_MAXIMUM_LENGTH ? `${row.DATA_TYPE}(${row.CHARACTER_MAXIMUM_LENGTH})` : row.DATA_TYPE;
-                const pkInfo = row.CONSTRAINT_TYPE === 'PRIMARY KEY' ? ' [PK]' : '';
+                const pkInfo = row.IS_PRIMARY_KEY === 'YES' ? ' [PK]' : '';
                 schemaMap[row.TABLE_NAME].push(`${row.COLUMN_NAME} (${typeInfo})${pkInfo}`);
             });
 
@@ -126,11 +137,8 @@ export const SqlSimulator: React.FC = () => {
             });
             
             setDbSchema(learnedSchema);
-            
-            // 시작 시 테이블 목록 보여주기 기능 제거 (Clean Start)
             setResult(null);
         } else {
-            // 스키마 조회 실패 시에도 결과창 비우기
             setResult(null);
         }
       } else {
@@ -161,7 +169,6 @@ export const SqlSimulator: React.FC = () => {
     if (!input.trim()) return;
     setLoading(true);
     setResult(null);
-    // setConnectionStatus('idle'); // Keep connection status, just show loading
 
     try {
       const sql = await generateSqlFromNaturalLanguage(input, dbSchema, customKnowledge);
@@ -225,12 +232,10 @@ export const SqlSimulator: React.FC = () => {
   };
 
   const handleBarcodeScan = async () => {
-    const camId = await getDeviceSetting('selectedCameraId');
-    alert(`바코드 스캔 활성화\n사용 카메라 ID: ${camId ? camId : '기본 카메라'}\n(데모: 상품코드 입력)`);
+    alert(`바코드 스캔 활성화 (데모: 상품코드 입력)`);
     setInput("상품코드 880123456789 조회");
   };
 
-  // 상태 표시 UI 결정
   const getStatusIndicator = () => {
     if (loading) {
       return (
@@ -273,18 +278,14 @@ export const SqlSimulator: React.FC = () => {
         isOpen={isSettingsOpen} 
         onClose={() => setIsSettingsOpen(false)}
         onUpdateKnowledge={(k) => setCustomKnowledge(k)}
-        currentSchema={dbSchema}
+        onForceReload={loadKnowledgeFromGit}
       />
 
-      {/* Header Control Area */}
       <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4 sticky top-16 z-30">
         <div className="flex items-center justify-between gap-2 mb-4">
-            {/* Left: Status Indicator */}
             <div className="flex items-center gap-2">
                  {getStatusIndicator()}
             </div>
-
-            {/* Right: Utility Buttons */}
             <div className="flex items-center gap-2">
                 {useRealApi && (
                 <button
@@ -306,7 +307,6 @@ export const SqlSimulator: React.FC = () => {
             </div>
         </div>
 
-        {/* Input Area */}
         <div className="flex gap-2 items-center">
           <div className="relative flex-1">
             <input
@@ -329,7 +329,6 @@ export const SqlSimulator: React.FC = () => {
           </div>
         </div>
         
-        {/* Action Buttons (Swapped: Execute First, Scan Second) */}
         <div className="flex gap-2 mt-3">
              <button
                 onClick={handleSimulate}
@@ -349,11 +348,9 @@ export const SqlSimulator: React.FC = () => {
         </div>
       </div>
 
-      {/* Results Area (Mobile First: Results before Query) */}
       {result && (
         <div className="space-y-4 animate-fade-in">
           
-          {/* 1. Result Data (First) */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-[200px]">
             <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -367,12 +364,13 @@ export const SqlSimulator: React.FC = () => {
             <div className="p-0 flex-1 bg-slate-50/30">
               {result.error ? (
                 <div className="p-6 text-red-600 text-sm font-mono whitespace-pre-wrap bg-red-50 h-full flex items-center justify-center text-center">
-                  <AlertTriangle className="w-6 h-6 mx-auto mb-2 text-red-500" />
-                  {result.error}
+                   <div className="flex flex-col items-center">
+                        <AlertTriangle className="w-6 h-6 mx-auto mb-2 text-red-500" />
+                        <span>{result.error}</span>
+                   </div>
                 </div>
               ) : (
                 <>
-                    {/* Mobile Card View */}
                     <div className="block md:hidden p-3 space-y-3">
                         {result.data.length > 0 ? result.data.map((row, idx) => (
                             <div key={idx} className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm space-y-2">
@@ -390,7 +388,6 @@ export const SqlSimulator: React.FC = () => {
                         )}
                     </div>
 
-                    {/* Desktop Table View */}
                     <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-left text-sm text-slate-600">
                         <thead className="bg-slate-100 text-slate-700 uppercase font-semibold sticky top-0">
@@ -422,7 +419,6 @@ export const SqlSimulator: React.FC = () => {
             </div>
           </div>
 
-          {/* 2. Generated SQL (Second - Collapsible) */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <button 
                 onClick={() => setShowSql(!showSql)}
