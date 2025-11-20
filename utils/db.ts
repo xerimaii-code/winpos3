@@ -1,4 +1,5 @@
 
+
 export interface QueryHistoryItem {
     id: number;
     name: string;
@@ -78,14 +79,6 @@ export const getDeviceSetting = async (key: string): Promise<any> => {
     request.onerror = () => reject(request.error);
   });
 };
-
-// Git Config 저장/불러오기 헬퍼
-export interface GitConfig {
-    gistId: string;
-    pat: string;
-}
-export const saveGitConfig = async (config: GitConfig) => saveDeviceSetting('gitConfig', config);
-export const getGitConfig = async (): Promise<GitConfig | null> => getDeviceSetting('gitConfig');
 
 
 // --- Query History 관련 ---

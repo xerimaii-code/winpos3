@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Save, BrainCircuit, Database, GitBranch, Loader2, Link } from 'lucide-react';
-import { saveKnowledge, saveGitConfig, getGitConfig, GitConfig } from '../utils/db';
+import { X, Save, BrainCircuit, Database, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+import { saveKnowledge } from '../utils/db';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -15,107 +15,35 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
   const [activeTab, setActiveTab] = useState<'learning' | 'schema'>('learning');
   const [knowledge, setKnowledge] = useState(initialKnowledge);
   const [isSaving, setIsSaving] = useState(false);
-  const [isGitSyncing, setIsGitSyncing] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const [gitConfig, setGitConfig] = useState<Partial<GitConfig>>({ gistId: '', pat: '' });
-  const [gistFilename, setGistFilename] = useState<string | null>(null);
-  const [isGitSaving, setIsGitSaving] = useState(false);
-  
   useEffect(() => {
     if (isOpen) {
         setKnowledge(initialKnowledge);
-        const fetchGitConfig = async () => {
-          const config = await getGitConfig();
-          if (config) {
-            setGitConfig(config);
-            if (config.gistId) {
-              try {
-                const response = await fetch(`https://api.github.com/gists/${config.gistId}`);
-                if (response.ok) {
-                  const data = await response.json();
-                  const filename = Object.keys(data.files)[0];
-                  if (filename) setGistFilename(filename);
-                }
-              } catch (e) { console.error("Could not fetch Gist details", e); }
-            }
-          }
-        };
-        fetchGitConfig();
+        setStatusMessage(null); // Reset status on open
     }
   }, [isOpen, initialKnowledge]);
 
-  const handleGitConfigChange = (field: keyof GitConfig, value: string) => {
-    setGitConfig(prev => ({ ...prev, [field]: value }));
+  const showStatus = (type: 'success' | 'error', text: string, duration = 5000) => {
+      setStatusMessage({ type, text });
+      setTimeout(() => setStatusMessage(null), duration);
   };
 
-  const handleSaveGitConfig = async () => {
-    setIsGitSaving(true);
-    setGistFilename(null);
-    try {
-        const configToSave = { gistId: gitConfig.gistId || '', pat: gitConfig.pat || '' };
-        await saveGitConfig(configToSave);
-        
-        if (configToSave.gistId) {
-            const response = await fetch(`https://api.github.com/gists/${configToSave.gistId}`);
-            if (response.ok) {
-                const data = await response.json();
-                const filename = Object.keys(data.files)[0];
-                setGistFilename(filename || null);
-                if (!filename) {
-                     alert("Gist를 찾았지만 파일이 없습니다. Gist에 파일이 있는지 확인해주세요.");
-                }
-            } else {
-                alert("Gist ID를 찾을 수 없습니다. 올바른 ID인지 확인해주세요.");
-            }
-        }
-        alert("Git 설정이 저장되었습니다.");
-    } catch (e) {
-        console.error("Failed to save Git config", e);
-        alert("설정 저장에 실패했습니다.");
-    } finally {
-        setIsGitSaving(false);
-    }
-  };
-
-
-  const handleSaveAndSync = async () => {
+  const handleSaveKnowledge = async () => {
     setIsSaving(true);
-    setIsGitSyncing(false);
+    setStatusMessage(null);
+
     try {
+      // 1. Save to local browser storage first
       await saveKnowledge(knowledge);
       onKnowledgeSaved();
+      showStatus('success', "학습 내용이 브라우저에 저장되었습니다.");
       
-      if (gitConfig.gistId && gitConfig.pat && gistFilename) {
-          setIsGitSyncing(true);
-          const response = await fetch(`https://api.github.com/gists/${gitConfig.gistId}`, {
-              method: 'PATCH',
-              headers: {
-                  'Authorization': `token ${gitConfig.pat}`,
-                  'Accept': 'application/vnd.github.v3+json',
-              },
-              body: JSON.stringify({
-                  files: {
-                      [gistFilename]: {
-                          content: knowledge,
-                      },
-                  },
-              }),
-          });
-
-          if (!response.ok) {
-              const errorData = await response.json();
-              throw new Error(`Git 동기화 실패: ${errorData.message || '응답을 확인하세요.'}`);
-          }
-          alert("학습 내용이 브라우저와 Git에 모두 저장되었습니다.");
-      } else {
-          alert("학습 내용이 브라우저에 저장되었습니다.");
-      }
     } catch (e: any) {
-      console.error("Failed to save/sync knowledge", e);
-      alert(`저장/동기화 실패: ${e.message}`);
+      console.error("Failed to save knowledge", e);
+      showStatus('error', `저장 실패: ${e.message}`);
     } finally {
       setIsSaving(false);
-      setIsGitSyncing(false);
     }
   };
 
@@ -142,34 +70,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
           {activeTab === 'learning' && (
             <div className="animate-fade-in-fast space-y-6">
               <div>
-                <h4 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2"><GitBranch className="w-4 h-4 text-slate-500" /> Git 원격 지식 동기화 (선택)</h4>
-                <p className="text-xs text-slate-500 mb-3">GitHub Gist를 통해 여러 기기에서 지식을 자동으로 동기화합니다. 앱 시작 시 자동으로 지식을 불러옵니다.</p>
-                <div className="space-y-3 p-4 bg-slate-100 rounded-lg border border-slate-200">
-                    <div>
-                        <label className="text-xs font-bold text-slate-600" htmlFor="gistId">GitHub Gist ID</label>
-                        <input id="gistId" type="text" value={gitConfig.gistId} onChange={(e) => handleGitConfigChange('gistId', e.target.value)} placeholder="예: 123abc456def789..." className="mt-1 w-full p-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 text-sm shadow-inner" />
-                    </div>
-                    <div>
-                        <label className="text-xs font-bold text-slate-600" htmlFor="pat">GitHub Personal Access Token (PAT)</label>
-                        <input id="pat" type="password" value={gitConfig.pat} onChange={(e) => handleGitConfigChange('pat', e.target.value)} placeholder="ghp_****************" className="mt-1 w-full p-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 text-sm shadow-inner" />
-                        <p className="text-xs text-slate-400 mt-1.5">Gist를 수정할 수 있는 <code className="bg-slate-200 px-1 rounded">'gist'</code> 스코프 권한이 필요합니다.</p>
-                    </div>
-                    <button onClick={handleSaveGitConfig} disabled={isGitSaving} className="w-full sm:w-auto px-4 py-2 text-xs font-bold bg-slate-600 text-white hover:bg-slate-700 rounded-lg transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50">
-                        {isGitSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-3 h-3" />}
-                        {isGitSaving ? '저장 중...' : 'Git 설정 저장'}
-                    </button>
-                </div>
-              </div>
-
-              <hr className="border-slate-200"/>
-
-              <div>
-                <h4 className="text-sm font-bold text-slate-700 mb-2">사용자 정의 지식</h4>
-                <p className="text-xs text-slate-500 mb-3">DB 스키마 외에 AI에게 알려주고 싶은 업무 규칙, 데이터 코드의 의미 등을 자유롭게 작성해주세요.</p>
+                <h4 className="text-sm font-bold text-slate-700 mb-2">사용자 정의 지식 편집</h4>
+                <p className="text-xs text-slate-500 mb-3">업무 규칙, 데이터 코드의 의미 등을 AI에게 알려주세요. 변경 후 반드시 저장해야 적용됩니다.</p>
                 <textarea value={knowledge} onChange={(e) => setKnowledge(e.target.value)} placeholder="예: '취소된 주문은 sale_status가 9번입니다.'" className="w-full h-48 p-4 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 resize-none text-sm leading-relaxed shadow-inner" />
-                <button onClick={handleSaveAndSync} disabled={isSaving} className="mt-4 w-full flex items-center justify-center gap-2 px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold text-sm shadow-lg shadow-rose-500/30 transition-all active:scale-95 disabled:opacity-50">
-                    {(isSaving || isGitSyncing) ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-4 h-4" />}
-                    {isGitSyncing ? "Git에 동기화 중..." : (isSaving ? "저장 중..." : "브라우저 및 Git에 저장")}
+                
+                {statusMessage && (
+                    <div className={`mt-4 p-3 rounded-lg flex items-center gap-3 text-sm ${ statusMessage.type === 'success' ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : 'bg-red-50 border border-red-200 text-red-800' }`}>
+                        {statusMessage.type === 'success' ? <CheckCircle className="w-5 h-5 flex-shrink-0" /> : <AlertCircle className="w-5 h-5 flex-shrink-0" />}
+                        <span className="break-all">{statusMessage.text}</span>
+                    </div>
+                )}
+
+                <button onClick={handleSaveKnowledge} disabled={isSaving} className="mt-4 w-full flex items-center justify-center gap-2 px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold text-sm shadow-lg shadow-rose-500/30 transition-all active:scale-95 disabled:opacity-50">
+                    {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-4 h-4" />}
+                    {isSaving ? '저장 중...' : "브라우저에 저장"}
                 </button>
               </div>
 
