@@ -87,3 +87,7 @@ export const getDeviceSetting = async (key: string): Promise<any> => {
     request.onerror = () => reject(request.error);
   });
 };
+
+// Git URL 저장/불러오기 헬퍼
+export const saveGitUrl = async (url: string) => saveDeviceSetting('gitUrl', url);
+export const getGitUrl = async () => getDeviceSetting('gitUrl');

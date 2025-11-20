@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Save, BookOpen, Trash2, Camera, Settings, Database } from 'lucide-react';
-import { saveKnowledge, getKnowledge, saveDeviceSetting, getDeviceSetting } from '../utils/db';
+import { X, Save, BookOpen, Trash2, Camera, Settings, Database, Github, Download, Upload, Code2, Globe, Copy, CheckCircle2, FileCode } from 'lucide-react';
+import { saveKnowledge, getKnowledge, saveDeviceSetting, getDeviceSetting, saveGitUrl, getGitUrl } from '../utils/db';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -11,7 +11,7 @@ interface SettingsModalProps {
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, onUpdateKnowledge, currentSchema }) => {
-  const [activeTab, setActiveTab] = useState<'knowledge' | 'camera' | 'schema'>('knowledge');
+  const [activeTab, setActiveTab] = useState<'knowledge' | 'camera' | 'schema' | 'git' | 'api'>('knowledge');
   
   // Knowledge State
   const [knowledge, setKnowledge] = useState('');
@@ -21,6 +21,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
   const [selectedCameraId, setSelectedCameraId] = useState<string>('');
   const [cameraLoading, setCameraLoading] = useState(false);
+
+  // Git Sync State
+  const [gitUrl, setGitUrl] = useState('');
+  const [gitLoading, setGitLoading] = useState(false);
+
+  // API Integration State
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -32,6 +39,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
     // Load Knowledge
     const savedKnowledge = await getKnowledge();
     setKnowledge(savedKnowledge);
+
+    // Load Git URL
+    const savedGitUrl = await getGitUrl();
+    if (savedGitUrl) setGitUrl(savedGitUrl);
 
     // Load Camera Settings & List
     try {
@@ -84,11 +95,63 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
     }
   };
 
+  const handleImportFromGit = async () => {
+    if (!gitUrl) return alert("Git Raw URL을 입력해주세요.");
+    setGitLoading(true);
+    try {
+      const res = await fetch(gitUrl);
+      if (!res.ok) throw new Error("Failed to fetch");
+      const text = await res.text();
+      setKnowledge(text);
+      await saveGitUrl(gitUrl); // URL 저장
+      alert("데이터를 불러왔습니다. '학습 내용 저장' 버튼을 눌러 반영해주세요.");
+    } catch (e) {
+      alert("불러오기 실패: URL을 확인하거나 CORS 문제를 확인하세요.");
+    } finally {
+      setGitLoading(false);
+    }
+  };
+
+  const handleExportToFile = () => {
+    const blob = new Blob([knowledge], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `winpos3_knowledge_${new Date().toISOString().slice(0,10)}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCopyCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const fetchCodeSnippet = `// Winpos3 API 호출 예제
+async function fetchWinposData(sqlQuery) {
+  const response = await fetch('${window.location.origin}/api/query', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      // 'X-Api-Key': 'YOUR_SECRET_KEY' (필요시 백엔드 인증 추가)
+    },
+    body: JSON.stringify({ query: sqlQuery })
+  });
+
+  const result = await response.json();
+  return result.data;
+}
+
+// 사용 예시
+fetchWinposData("SELECT * FROM goods WHERE gname LIKE '%사과%'")
+  .then(data => console.log(data));`;
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-slate-100">
           <div className="flex items-center gap-2">
@@ -103,27 +166,41 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-slate-100 px-6">
+        <div className="flex border-b border-slate-100 px-6 overflow-x-auto">
             <button 
                 onClick={() => setActiveTab('knowledge')}
-                className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'knowledge' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'knowledge' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
             >
                 <BookOpen className="w-4 h-4" />
                 심화 학습
             </button>
             <button 
+                onClick={() => setActiveTab('git')}
+                className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'git' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            >
+                <Github className="w-4 h-4" />
+                Git 동기화
+            </button>
+            <button 
                 onClick={() => setActiveTab('camera')}
-                className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'camera' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'camera' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
             >
                 <Camera className="w-4 h-4" />
                 카메라 설정
             </button>
              <button 
+                onClick={() => setActiveTab('api')}
+                className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'api' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            >
+                <Globe className="w-4 h-4" />
+                API 연동
+            </button>
+             <button 
                 onClick={() => setActiveTab('schema')}
-                className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'schema' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+                className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'schema' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
             >
                 <Database className="w-4 h-4" />
-                DB 스키마 정보
+                DB 스키마
             </button>
         </div>
 
@@ -160,6 +237,76 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
                             <Save className="w-4 h-4" />
                             {knowledgeLoading ? '저장 중...' : '학습 내용 저장'}
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'git' && (
+                <div className="space-y-6">
+                     <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                        <h3 className="text-sm font-bold text-slate-800 mb-2 flex items-center gap-2">
+                            <Upload className="w-4 h-4" /> 가져오기 (Import)
+                        </h3>
+                        <p className="text-xs text-slate-500 mb-4">
+                            GitHub의 Raw 파일 URL을 입력하여 학습 내용을 불러옵니다. (예: raw.githubusercontent.com/...)
+                        </p>
+                        <div className="flex gap-2">
+                            <input 
+                                type="text" 
+                                value={gitUrl}
+                                onChange={(e) => setGitUrl(e.target.value)}
+                                placeholder="https://raw.githubusercontent.com/user/repo/main/knowledge.txt"
+                                className="flex-1 bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500"
+                            />
+                            <button 
+                                onClick={handleImportFromGit}
+                                disabled={gitLoading}
+                                className="bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-900 disabled:opacity-70"
+                            >
+                                {gitLoading ? '로딩...' : '불러오기'}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                        <h3 className="text-sm font-bold text-slate-800 mb-2 flex items-center gap-2">
+                            <Download className="w-4 h-4" /> 내보내기 (Export)
+                        </h3>
+                        <p className="text-xs text-slate-500 mb-4">
+                            현재 작성된 학습 내용을 텍스트 파일로 다운로드합니다. 이 파일을 Git에 올리세요.
+                        </p>
+                        <button 
+                            onClick={handleExportToFile}
+                            className="w-full bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors"
+                        >
+                            <FileCode className="w-4 h-4" />
+                            .txt 파일로 다운로드
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'api' && (
+                <div className="space-y-4">
+                     <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
+                        <h4 className="text-indigo-900 font-bold text-sm mb-2 flex items-center gap-2">
+                            <Code2 className="w-4 h-4" /> 클라이언트 연동 코드 (JavaScript)
+                        </h4>
+                        <p className="text-xs text-indigo-700 mb-3 leading-relaxed">
+                            이 서버의 API를 다른 웹사이트나 앱에서 사용할 수 있습니다. 아래 코드를 복사하여 사용하세요.
+                            (CORS가 허용되어 있어 어디서든 호출 가능합니다.)
+                        </p>
+                        <div className="relative">
+                            <pre className="bg-slate-900 text-blue-100 p-4 rounded-lg text-xs font-mono overflow-x-auto leading-relaxed">
+                                {fetchCodeSnippet}
+                            </pre>
+                            <button 
+                                onClick={() => handleCopyCode(fetchCodeSnippet)}
+                                className="absolute top-2 right-2 bg-white/10 hover:bg-white/20 text-white p-2 rounded transition-colors"
+                            >
+                                {copied ? <CheckCircle2 className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

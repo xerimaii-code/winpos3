@@ -127,20 +127,11 @@ export const SqlSimulator: React.FC = () => {
             
             setDbSchema(learnedSchema);
             
-            // 간단한 요약만 결과로 표시
-            const simplifiedData = Object.keys(schemaMap).map(tableName => ({ 
-                Table: tableName, 
-                Columns: schemaMap[tableName].length 
-            }));
-            setResult({
-                sql: "-- AI has analyzed the database structure including PKs and Data Types.",
-                data: simplifiedData
-            });
+            // 시작 시 테이블 목록 보여주기 기능 제거 (Clean Start)
+            setResult(null);
         } else {
-            setResult({
-                sql: testQuery,
-                data: json.data
-            });
+            // 스키마 조회 실패 시에도 결과창 비우기
+            setResult(null);
         }
       } else {
         throw new Error("No data returned from DB");

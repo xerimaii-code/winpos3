@@ -19,7 +19,7 @@ const App: React.FC = () => {
               </h1>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-mono text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded border border-indigo-200">
-                  v8.0 (Deep Learning)
+                  v8.3 (Integration)
                 </span>
               </div>
             </div>

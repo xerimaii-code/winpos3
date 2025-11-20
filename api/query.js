@@ -45,10 +45,10 @@ export default async function handler(req, res) {
     const result = await pool.request().query(query);
     await pool.close();
     
-    // apiVersion 필드 추가 (배포 버전 확인용 v8.0)
+    // apiVersion 필드 추가 (배포 버전 확인용 v8.3)
     res.status(200).json({ 
       data: result.recordset,
-      apiVersion: 'v8.0 (Backend Updated)'
+      apiVersion: 'v8.3 (Backend Updated)'
     });
     
   } catch (error) {
@@ -57,7 +57,7 @@ export default async function handler(req, res) {
       error: 'Database Error', 
       details: error.message, 
       code: error.code,
-      apiVersion: 'v8.0 (Backend Updated)'
+      apiVersion: 'v8.3 (Backend Updated)'
     });
   }
 }
