@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FileJson, Server, Terminal, CheckCircle2, Copy, AlertTriangle, Settings, FileCode } from 'lucide-react';
+import { FileJson, Server, Terminal, CheckCircle2, Copy, AlertTriangle, Settings, FileCode, Key } from 'lucide-react';
 
 export const DeploymentGuide: React.FC = () => {
   const [copied, setCopied] = useState<string | null>(null);
@@ -139,10 +139,10 @@ export default async function handler(req, res) {
     const result = await pool.request().query(query);
     await pool.close();
     
-    // apiVersion 필드 추가 (배포 버전 확인용 v5.4)
+    // apiVersion 필드 추가 (배포 버전 확인용 v5.5)
     res.status(200).json({ 
       data: result.recordset,
-      apiVersion: 'v5.4 (Backend Updated)'
+      apiVersion: 'v5.5 (Backend Updated)'
     });
     
   } catch (error) {
@@ -151,7 +151,7 @@ export default async function handler(req, res) {
       error: 'Database Error', 
       details: error.message, 
       code: error.code,
-      apiVersion: 'v5.4 (Backend Updated)'
+      apiVersion: 'v5.5 (Backend Updated)'
     });
   }
 }`;
@@ -159,7 +159,7 @@ export default async function handler(req, res) {
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-fade-in pb-12">
       <div className="text-center space-y-2 mb-10">
-        <h2 className="text-3xl font-bold text-white">Vercel 배포 최종 가이드</h2>
+        <h2 className="text-3xl font-bold text-white">Vercel 배포 최종 가이드 (v5.5)</h2>
         <p className="text-slate-400">
           아래 4개 파일을 프로젝트에 생성하고, Vercel 환경변수를 설정하면 배포가 완료됩니다.
         </p>
@@ -179,15 +179,15 @@ export default async function handler(req, res) {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between border-b border-slate-800 pb-2">
                     <span className="text-slate-500">HOST</span>
-                    <code className="text-blue-400">kjmartII.iptime.org</code>
+                    <code className="text-violet-400">kjmartII.iptime.org</code>
                   </div>
                   <div className="flex justify-between border-b border-slate-800 pb-2">
                     <span className="text-slate-500">PORT</span>
-                    <code className="text-blue-400">9876</code>
+                    <code className="text-violet-400">9876</code>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">DATABASE</span>
-                    <code className="text-blue-400">winpos3</code>
+                    <code className="text-violet-400">winpos3</code>
                   </div>
                 </div>
               </div>
@@ -244,9 +244,19 @@ export default async function handler(req, res) {
         
         <div className="bg-purple-900/20 border border-purple-500/30 rounded-xl p-6 ml-4">
             <div className="grid grid-cols-1 gap-3 text-sm">
+              <div className="flex items-center justify-between bg-slate-900/80 p-4 rounded-lg border border-slate-700 border-l-4 border-l-yellow-500">
+                <div>
+                  <span className="block font-mono text-yellow-400 font-bold mb-1 flex items-center gap-2">
+                    <Key className="w-4 h-4" /> API_KEY
+                  </span>
+                  <span className="text-slate-500 text-xs">Google Gemini API Key (필수)</span>
+                </div>
+                <code className="bg-slate-800 px-3 py-1 rounded text-slate-400 border border-slate-600">AIzaSy...</code>
+              </div>
+
               <div className="flex items-center justify-between bg-slate-900/80 p-4 rounded-lg border border-slate-700">
                 <div>
-                  <span className="block font-mono text-blue-300 font-bold mb-1">DB_NAME</span>
+                  <span className="block font-mono text-violet-300 font-bold mb-1">DB_NAME</span>
                   <span className="text-slate-500 text-xs">사용할 데이터베이스 이름</span>
                 </div>
                 <code className="bg-slate-800 px-3 py-1 rounded text-green-400 border border-slate-600">winpos3</code>

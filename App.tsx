@@ -11,12 +11,12 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>(Tab.SIMULATOR);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 selection:bg-indigo-500/30">
+    <div className="min-h-screen bg-slate-950 text-slate-200 selection:bg-violet-500/30">
       {/* Header */}
       <header className="sticky top-0 z-50 backdrop-blur-lg bg-slate-950/80 border-b border-slate-800">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-indigo-600 p-2 rounded-lg shadow-lg shadow-indigo-500/20">
+            <div className="bg-violet-600 p-2 rounded-lg shadow-lg shadow-violet-500/20">
               <Database className="w-6 h-6 text-white" />
             </div>
             <div>
@@ -24,8 +24,8 @@ const App: React.FC = () => {
                 MS SQL Connector
               </h1>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-mono text-white bg-indigo-600/80 px-2 py-0.5 rounded border border-indigo-500 shadow-sm">
-                  Frontend v5.4
+                <span className="text-xs font-mono text-white bg-violet-600/80 px-2 py-0.5 rounded border border-violet-500 shadow-sm">
+                  Frontend v5.5
                 </span>
               </div>
             </div>
@@ -47,7 +47,7 @@ const App: React.FC = () => {
               onClick={() => setActiveTab(Tab.SIMULATOR)}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
                 activeTab === Tab.SIMULATOR 
-                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/20' 
+                  ? 'bg-violet-600 text-white shadow-sm shadow-violet-500/20' 
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
               }`}
             >
@@ -79,7 +79,7 @@ const App: React.FC = () => {
               </h2>
               <p className="text-slate-400 text-lg">
                 웹 브라우저는 보안상의 이유로 데이터베이스에 직접 접속할 수 없습니다.<br/>
-                아래 <span className="text-indigo-400 font-semibold">5단계 순서(Step-by-Step)</span>를 따라 안전한 연결 구조를 구축하세요.
+                아래 <span className="text-violet-400 font-semibold">5단계 순서(Step-by-Step)</span>를 따라 안전한 연결 구조를 구축하세요.
               </p>
             </div>
 
