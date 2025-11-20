@@ -1,0 +1,25 @@
+항목,분석 내용,시사점
+DBMS,SQL Server (SQLOLEDB.1),높은 안정성과 트랜잭션 처리 능력을 요구하는 환경임.
+연결 정보,"User ID=sa, $\text{Password}$가 연결 문자열에 명시됨 (보안 주의 필요)",내부 LAN 또는 VPN 환경에서 주로 사용되는 레거시 시스템일 가능성이 있음.
+개발 환경,"Delphi/VCL 컴포넌트 (TADOConnection, TQuery, TTable) 및 BDE 언급",비교적 오래된 개발 환경에서 구축된 애플리케이션일 가능성이 높습니다.
+네트워크,IdTCPClient/IdTCPServer (Indy 컴포넌트) 사용,클라이언트/서버 통신 및 원격 데이터베이스 접속에 $\text{TCP/IP}$를 직접 사용하고 있음.
+
+상세 분석: 데이터 흐름 및 로직1. 재고(Jago) 관리 흐름재고는 $\text{PDA}$를 통해 임시로 입력되거나(pda_jago), 직접 업데이트됩니다.실시간 재고: update parts set curjago = curjago + :n1 쿼리를 통해 $\text{parts}$ 테이블의 $\mathbf{curjago}$ 필드가 즉시 갱신됩니다.재고 실사/마감: 월별 마감(magam_yymm) 개념을 사용하며, 이월 재고(beforec_)를 기준 시점으로 설정하고, 이후 입고/출고(ipgod_, outd_) 및 보정(bojung_) 데이터를 합산하여 최종 재고를 확정합니다.2. 판매(Sale) 및 매출 집계 로직판매 데이터는 $\text{PDA}$ 임시 테이블(pda_sale)을 거쳐 최종적으로 판매 마스터/상세 테이블에 저장되는 구조입니다.판매 준비: $\text{smart\_order\_ready}$ 테이블은 판매를 확정하기 전의 임시 주문 데이터를 저장하는 데 사용되는 것으로 보입니다.매출 집계: 매우 상세한 정산 로직을 포함합니다.총 매출: sum(tmamoney1 - tbamoney1) (총 판매금액 - 반품금액)현금 매출: sum(tmamoney1 - tbamoney1 - cdmoney1 - samoney1 - mimoney1 - ccdc - pointuse - cashback_use - totenddc - cmsmoney) (총 매출에서 카드, 서비스, 미수금, 포인트 등 모든 비현금/할인 요소를 제외한 순 현금)카드 매출: sum(cdmoney1)3. 품목 정보 (Parts) 관리 로직$\text{parts}$ 테이블은 시스템의 핵심 마스터 데이터입니다.가격/마진 관리:마진율 계산: $\text{money1}$ (판매가)과 $\text{money0vat}$ (원가)를 이용해 marginrate를 계산합니다: $$((\text{money1} - \text{money0vat}) / \text{money1}) \times 100$$가격 변동 기록: $\text{moneyhist}$ 테이블에 이전/이후 원가 및 판매가를 기록하여 투명성을 확보합니다.품명 구성: 이전 질문에서 분석한 로직과 같이, 규격(spec) 정보 유무에 따라 품목 설명(descr)이 달라집니다.
+
+
+모듈,핵심 기능 및 목적,관련 테이블/쿼리
+재고 관리 (Inventory),"입고, 출고, 현재고 업데이트, 재고 실사, 월 마감 및 이월 재고 처리","pda_jago, parts.curjago, magam_yymm, beforec_, ipgod_, outd_, bojung_"
+판매/매출 관리 (Sales),"판매 거래 기록, 매출 집계, 정산 (현금, 카드, 포인트 등), 판매 준비","pda_sale, sale_mast, sale_ready, outm_yymm, outd_yymm"
+품목/마스터 정보 (Parts Info),"상품 상세 정보(가격, 규격, 마진율, 재고) 조회 및 업데이트, 가격 변동 이력 관리","parts, comp, moneyhist"
+시스템/설정,"사용자 및 관리자 로그인, 시스템 설정값(회원 연동, 포인트 정책 등) 조회","login, memb_config"
+
+DBMS,CASE 문의 품명 로직
+SQL Server,CASE WHEN spec IS NOT NULL AND spec <> ” THEN descr + ’ [’ + spec + ’]’ ELSE descr END
+PostgreSQL,$\text{CASE WHEN spec IS NOT NULL AND spec <> '' THEN descr \|\| ' [' \|\| spec \|\| ']' ELSE desc$
+MySQL,"CASE WHEN spec IS NOT NULL AND spec <> ” THEN CONCAT(descr, ’ [’, spec, ’]’) ELSE descr END"
+
+
+조건,로직 (IIf 문의 조건),품명 생성 방식 (결과),예시
+참,spec 필드가 $\text{NULL}$이 아니고 빈 문자열('')이 아닐 때,[descr] + 스페이스 + [규격],"""노트북 [i7]"""
+거짓,spec 필드가 $\text{NULL}$이거나 빈 문자열('')일 때,[descr],"""노트북"""
+
