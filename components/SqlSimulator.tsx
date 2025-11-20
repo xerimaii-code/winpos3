@@ -14,6 +14,7 @@ export const SqlSimulator: React.FC = () => {
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [connectionMsg, setConnectionMsg] = useState('');
   const [connectedDbName, setConnectedDbName] = useState<string>('');
+  const [backendVersion, setBackendVersion] = useState<string>('Checking...');
 
   // Function to test connectivity
   const handleTestConnection = useCallback(async () => {
@@ -23,6 +24,7 @@ export const SqlSimulator: React.FC = () => {
     setConnectionStatus('idle');
     setResult(null);
     setConnectedDbName('');
+    setBackendVersion('Checking...');
 
     // 타임아웃 15초로 연장
     const controller = new AbortController();
@@ -44,6 +46,14 @@ export const SqlSimulator: React.FC = () => {
       }
 
       const json = await response.json();
+      
+      // 백엔드 버전 확인 로직
+      if (json.apiVersion) {
+        setBackendVersion(json.apiVersion);
+      } else {
+        setBackendVersion('Unknown (Old Version)');
+      }
+
       if (json.data && json.data.length > 0) {
         setConnectionStatus('success');
         
@@ -128,6 +138,10 @@ export const SqlSimulator: React.FC = () => {
           }
 
           const json = await response.json();
+          
+          // 백엔드 버전 업데이트
+          if (json.apiVersion) setBackendVersion(json.apiVersion);
+
           setResult({
             sql,
             data: json.data || [],
@@ -171,13 +185,9 @@ export const SqlSimulator: React.FC = () => {
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-xl font-semibold text-white">AI SQL Query Simulator</h3>
-                {/* Version Badge - Red for high visibility to confirm deployment update */}
-                <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-300 text-xs font-bold border border-red-500/40 animate-pulse">
-                    v3.0 (Updated)
-                </span>
               </div>
               <p className="text-slate-400 mt-1 text-sm">
-                자연어를 SQL로 변환하여 실행합니다. (Winpos3 접속)
+                자연어를 SQL로 변환하여 실행합니다.
               </p>
             </div>
           </div>
@@ -187,10 +197,10 @@ export const SqlSimulator: React.FC = () => {
               <button
                 onClick={handleTestConnection}
                 disabled={testLoading}
-                className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 transition-all text-sm font-medium whitespace-nowrap"
+                className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-all text-sm font-medium whitespace-nowrap"
               >
                 {testLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
-                {testLoading ? '접속 중...' : '재연결 테스트'}
+                {testLoading ? '접속 중...' : '연결 테스트'}
               </button>
             )}
 
@@ -214,15 +224,21 @@ export const SqlSimulator: React.FC = () => {
 
         {/* Connection Status Big Banner */}
         {useRealApi && connectionStatus === 'success' && (
-            <div className="mb-6 bg-green-900/20 border border-green-500/50 rounded-lg p-4 flex items-center gap-4 animate-fade-in">
-                <div className="p-3 bg-green-500/20 rounded-full text-green-400">
+            <div className="mb-6 bg-emerald-900/20 border border-emerald-500/50 rounded-lg p-4 flex flex-col md:flex-row md:items-center gap-4 animate-fade-in">
+                <div className="p-3 bg-emerald-500/20 rounded-full text-emerald-400 self-start md:self-center">
                     <Server className="w-6 h-6" />
                 </div>
-                <div>
-                    <h4 className="text-green-300 font-bold text-lg flex items-center gap-2">
+                <div className="flex-1">
+                    <h4 className="text-emerald-300 font-bold text-lg flex items-center gap-2">
                         Connected to: <span className="text-white underline underline-offset-4">{connectedDbName}</span>
                     </h4>
-                    <p className="text-green-400/70 text-xs font-mono mt-1">{connectionMsg}</p>
+                    <p className="text-emerald-400/70 text-xs font-mono mt-1">{connectionMsg}</p>
+                </div>
+                <div className="bg-slate-950 px-3 py-2 rounded border border-slate-700 text-right">
+                    <div className="text-[10px] uppercase text-slate-500 font-bold">API Status</div>
+                    <div className={`text-sm font-mono ${backendVersion.includes('v4.0') ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {backendVersion}
+                    </div>
                 </div>
             </div>
         )}
@@ -253,13 +269,13 @@ export const SqlSimulator: React.FC = () => {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSimulate()}
             placeholder={useRealApi ? `[${connectedDbName || 'DB'}]에 쿼리 요청 (예: 모든 테이블 보여줘)` : "예: '관리자(Admin) 권한을 가진 사용자 보여줘'"}
-            className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg py-4 pl-12 pr-24 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+            className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg py-4 pl-12 pr-24 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
           />
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 w-5 h-5" />
           <button
             onClick={handleSimulate}
             disabled={loading || !input.trim()}
-            className="absolute right-2 top-1/2 -translate-y-1/2 bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="absolute right-2 top-1/2 -translate-y-1/2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md font-medium text-sm transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
             실행
@@ -271,10 +287,10 @@ export const SqlSimulator: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
           <div className="bg-slate-900 rounded-xl border border-slate-700 overflow-hidden flex flex-col">
             <div className="bg-slate-800 px-4 py-3 border-b border-slate-700 flex items-center gap-2">
-              <Code className="w-4 h-4 text-green-400" />
+              <Code className="w-4 h-4 text-emerald-400" />
               <span className="text-sm font-mono text-slate-300">Generated T-SQL</span>
             </div>
-            <div className="p-4 font-mono text-sm text-green-300 overflow-auto flex-1 whitespace-pre-wrap">
+            <div className="p-4 font-mono text-sm text-emerald-300 overflow-auto flex-1 whitespace-pre-wrap">
               {result.sql}
             </div>
           </div>

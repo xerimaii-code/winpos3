@@ -11,17 +11,24 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>(Tab.SIMULATOR);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 selection:bg-blue-500/30">
+    <div className="min-h-screen bg-slate-950 text-slate-200 selection:bg-emerald-500/30">
       {/* Header */}
       <header className="sticky top-0 z-50 backdrop-blur-lg bg-slate-950/80 border-b border-slate-800">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-blue-600 p-2 rounded-lg">
+            <div className="bg-emerald-600 p-2 rounded-lg shadow-lg shadow-emerald-500/20">
               <Database className="w-6 h-6 text-white" />
             </div>
-            <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-              MS SQL Connector (v3.0)
-            </h1>
+            <div>
+              <h1 className="text-xl font-bold text-white">
+                MS SQL Connector
+              </h1>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono text-emerald-400 bg-emerald-900/30 px-1.5 py-0.5 rounded border border-emerald-800">
+                  Frontend v4.0
+                </span>
+              </div>
+            </div>
           </div>
           
           <nav className="flex gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
@@ -40,7 +47,7 @@ const App: React.FC = () => {
               onClick={() => setActiveTab(Tab.SIMULATOR)}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 flex items-center gap-2 ${
                 activeTab === Tab.SIMULATOR 
-                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20' 
+                  ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-500/20' 
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
               }`}
             >
