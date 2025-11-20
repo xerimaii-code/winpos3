@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Save, BrainCircuit, Database, Loader2, AlertCircle, CheckCircle, HardDrive } from 'lucide-react';
+import { X, Save, BrainCircuit, Database, Loader2, AlertCircle, CheckCircle, HardDrive, FileJson, Upload } from 'lucide-react';
 import { saveKnowledge, saveDbSchema, exportData, importData } from '../utils/db';
 
 interface SettingsModalProps {
@@ -24,11 +24,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
     if (isOpen) {
         setKnowledge(initialKnowledge);
         setLocalDbSchema(dbSchema);
-        setStatusMessage(null); // Reset status on open
+        setStatusMessage(null);
     }
   }, [isOpen, initialKnowledge, dbSchema]);
 
-  const showStatus = (type: 'success' | 'error', text: string, duration = 5000) => {
+  const showStatus = (type: 'success' | 'error', text: string, duration = 3000) => {
       setStatusMessage({ type, text });
       setTimeout(() => setStatusMessage(null), duration);
   };
@@ -37,10 +37,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
     setIsSaving(true);
     setStatusMessage(null);
     try {
+      // 1. 심화 학습 내용 저장
       await saveKnowledge(knowledge);
+      
+      // 2. DB 스키마 저장
       await saveDbSchema(localDbSchema);
-      setDbSchema(localDbSchema); // Update parent state immediately
-      showStatus('success', "학습 내용과 DB 스키마가 브라우저에 저장되었습니다.");
+      setDbSchema(localDbSchema); // 부모 컴포넌트 상태 업데이트
+
+      showStatus('success', "모든 설정이 브라우저(IndexedDB)에 저장되었습니다.");
+      
+      // 약간의 지연 후 데이터 리로드 트리거
+      setTimeout(() => {
+          onDataSaved();
+      }, 500);
     } catch (e: any) {
       console.error("Failed to save data", e);
       showStatus('error', `저장 실패: ${e.message}`);
@@ -62,7 +71,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        showStatus('success', '데이터가 성공적으로 백업되었습니다.');
+        showStatus('success', '데이터 백업 파일이 다운로드되었습니다.');
     } catch (e: any) {
         showStatus('error', `백업 실패: ${e.message}`);
     }
@@ -80,30 +89,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
     reader.onload = async (e) => {
         try {
             const text = e.target?.result;
-            if (typeof text !== 'string') throw new Error("File could not be read.");
+            if (typeof text !== 'string') throw new Error("파일을 읽을 수 없습니다.");
+            
             const data = JSON.parse(text);
             await importData(data);
-            showStatus('success', '데이터 복원 완료. 앱을 다시 시작합니다.');
+            
+            showStatus('success', '데이터가 성공적으로 복원되었습니다. 잠시 후 갱신됩니다.');
+            
             setTimeout(() => {
-                onDataSaved(); // Reload parent state
+                onDataSaved(); // 앱 상태 리로드
                 onClose();
-            }, 2000);
+            }, 1500);
         } catch (error: any) {
-            showStatus('error', `복원 실패: ${error.message}`);
+            showStatus('error', `복원 실패: 데이터 형식이 올바르지 않습니다. (${error.message})`);
         }
     };
     reader.onerror = () => {
-        showStatus('error', '파일을 읽는 중 오류가 발생했습니다.');
+        showStatus('error', '파일 읽기 중 오류가 발생했습니다.');
     };
     reader.readAsText(file);
-    // Reset file input so the same file can be selected again
-    if(event.target) event.target.value = '';
+    if(event.target) event.target.value = ''; // Reset input
   };
 
   if (!isOpen) return null;
   
   const TabButton = ({ id, label, icon }: { id: string, label: string, icon: React.ReactNode }) => (
-    <button onClick={() => setActiveTab(id as any)} className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold transition-all ${activeTab === id ? 'bg-rose-600 text-white shadow-md' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>
+    <button onClick={() => setActiveTab(id as any)} className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold transition-all ${activeTab === id ? 'bg-rose-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
       {icon} {label}
     </button>
   );
@@ -112,61 +123,118 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between p-6 border-b border-slate-100">
-          <div className="flex items-center gap-3"><div className="p-2 bg-rose-100 text-rose-600 rounded-lg"><BrainCircuit className="w-6 h-6" /></div><div><h2 className="text-xl font-bold text-slate-800">AI 설정 및 데이터 관리</h2><p className="text-slate-500 text-sm">AI의 지식과 DB 스키마를 관리하고 데이터를 백업/복원합니다.</p></div></div>
+          <div className="flex items-center gap-3">
+              <div className="p-2 bg-rose-100 text-rose-600 rounded-lg">
+                  {activeTab === 'learning' ? <BrainCircuit className="w-6 h-6" /> : <HardDrive className="w-6 h-6" />}
+              </div>
+              <div>
+                  <h2 className="text-xl font-bold text-slate-800">설정 및 데이터</h2>
+                  <p className="text-slate-500 text-sm">AI 지식 관리 및 데이터 백업/복원</p>
+              </div>
+          </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-100"><X className="w-5 h-5" /></button>
         </div>
-        <div className="flex rounded-t-lg overflow-hidden p-1 bg-slate-100 m-6 mb-0">
+        
+        <div className="flex border-b border-slate-200">
           <TabButton id="learning" label="AI 학습" icon={<BrainCircuit className="w-4 h-4" />} />
-          <TabButton id="data" label="데이터 관리" icon={<HardDrive className="w-4 h-4" />} />
+          <TabButton id="data" label="데이터 관리" icon={<Database className="w-4 h-4" />} />
         </div>
-        <div className="flex-1 p-6 pt-4 overflow-y-auto bg-slate-50">
+
+        <div className="flex-1 p-6 overflow-y-auto bg-slate-50">
           {activeTab === 'learning' && (
-            <div className="animate-fade-in-fast space-y-6">
-              <div>
-                <h4 className="text-sm font-bold text-slate-700 mb-2">심화 학습 내용</h4>
-                <p className="text-xs text-slate-500 mb-3">AI가 SQL 생성 시 참고할 비즈니스 규칙이나 특별 지식을 입력합니다.</p>
-                <textarea value={knowledge} onChange={(e) => setKnowledge(e.target.value)} placeholder="예: '취소된 주문은 sale_status가 9번입니다.'" className="w-full h-32 p-4 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 resize-y text-sm leading-relaxed shadow-inner" />
+            <div className="space-y-6 animate-fade-in">
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                    <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                        <BrainCircuit className="w-4 h-4 text-rose-500"/> 심화 학습 (Business Knowledge)
+                    </h4>
+                    <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">Editable</span>
+                </div>
+                <p className="text-xs text-slate-500">
+                    AI가 쿼리를 생성할 때 반드시 따라야 할 업무 규칙을 자연어로 입력하세요.
+                </p>
+                <textarea 
+                    value={knowledge} 
+                    onChange={(e) => setKnowledge(e.target.value)} 
+                    placeholder="예: '취소된 주문(sale_status=9)은 매출 집계에서 제외해줘.'" 
+                    className="w-full h-40 p-4 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 resize-y text-sm leading-relaxed shadow-sm font-medium text-slate-700" 
+                />
               </div>
-              <div>
-                <h4 className="text-sm font-bold text-slate-700 mb-2">DB 스키마</h4>
-                <p className="text-xs text-slate-500 mb-3">앱이 자동으로 학습한 DB 구조입니다. 필요 시 직접 수정할 수 있습니다.</p>
-                <textarea value={localDbSchema} onChange={(e) => setLocalDbSchema(e.target.value)} readOnly={false} className="w-full h-40 p-4 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 resize-y text-xs font-mono text-slate-600 leading-relaxed shadow-inner" />
+
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                    <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                        <Database className="w-4 h-4 text-blue-500"/> DB 스키마 (Schema Structure)
+                    </h4>
+                    <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">Auto-Learned</span>
+                </div>
+                <p className="text-xs text-slate-500">
+                    앱 시작 시 자동으로 학습된 DB 구조입니다. 필요 시 수정하여 저장할 수 있습니다.
+                </p>
+                <textarea 
+                    value={localDbSchema} 
+                    onChange={(e) => setLocalDbSchema(e.target.value)} 
+                    className="w-full h-40 p-4 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y text-xs font-mono text-slate-600 leading-relaxed shadow-sm" 
+                />
               </div>
-              <button onClick={handleSave} disabled={isSaving} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-800 text-white rounded-lg font-bold text-sm shadow-lg shadow-slate-500/30 transition-all active:scale-95 disabled:opacity-50">
-                  {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-4 h-4" />}
-                  {isSaving ? '저장 중...' : "브라우저에 저장"}
+
+              <button onClick={handleSave} disabled={isSaving} className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-rose-200 transition-all active:scale-95 disabled:opacity-70">
+                  {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
+                  {isSaving ? '저장 중...' : "브라우저에 저장 (Save to Browser)"}
               </button>
             </div>
           )}
+
           {activeTab === 'data' && (
-            <div className="animate-fade-in-fast text-center space-y-4 p-4">
-               <h4 className="text-base font-bold text-slate-700">데이터 백업 및 복원</h4>
-               <p className="text-sm text-slate-500 max-w-md mx-auto">
-                 AI 학습 내용, DB 스키마, 쿼리 히스토리를 포함한 모든 데이터를 하나의 파일로 내보내거나, 백업 파일에서 복원할 수 있습니다.
-               </p>
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-                  <button onClick={handleBackup} className="w-full flex flex-col items-center justify-center gap-2 px-4 py-6 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-bold text-sm border border-blue-200 transition-all active:scale-95">
-                      <Database className="w-8 h-8 mb-2" />
-                      데이터 백업
-                      <span className="font-normal text-xs">(JSON 파일로 내보내기)</span>
+            <div className="space-y-6 animate-fade-in">
+               <div className="bg-blue-50 border border-blue-100 rounded-xl p-5 text-center">
+                   <h4 className="text-base font-bold text-blue-800 mb-2">데이터 백업 및 복원</h4>
+                   <p className="text-sm text-blue-600 mb-4">
+                       현재 설정된 <b>심화 학습 내용</b>, <b>DB 스키마</b>, 그리고 <b>저장된 쿼리 히스토리</b>를 <br/>
+                       하나의 파일로 안전하게 보관하거나 복원할 수 있습니다.
+                   </p>
+               </div>
+
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <button onClick={handleBackup} className="flex flex-col items-center justify-center gap-3 p-6 bg-white border-2 border-slate-200 hover:border-rose-400 hover:bg-rose-50 rounded-xl transition-all group">
+                      <div className="p-3 bg-slate-100 group-hover:bg-white rounded-full transition-colors">
+                        <FileJson className="w-8 h-8 text-slate-600 group-hover:text-rose-500" />
+                      </div>
+                      <div className="text-center">
+                          <span className="block font-bold text-slate-800 group-hover:text-rose-700">데이터 백업</span>
+                          <span className="text-xs text-slate-400">.json 파일로 다운로드</span>
+                      </div>
                   </button>
-                   <button onClick={handleRestoreClick} className="w-full flex flex-col items-center justify-center gap-2 px-4 py-6 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg font-bold text-sm border border-emerald-200 transition-all active:scale-95">
-                      <HardDrive className="w-8 h-8 mb-2" />
-                      데이터 복원
-                      <span className="font-normal text-xs">(백업 파일에서 가져오기)</span>
+
+                  <button onClick={handleRestoreClick} className="flex flex-col items-center justify-center gap-3 p-6 bg-white border-2 border-slate-200 hover:border-emerald-400 hover:bg-emerald-50 rounded-xl transition-all group">
+                      <div className="p-3 bg-slate-100 group-hover:bg-white rounded-full transition-colors">
+                        <Upload className="w-8 h-8 text-slate-600 group-hover:text-emerald-500" />
+                      </div>
+                      <div className="text-center">
+                          <span className="block font-bold text-slate-800 group-hover:text-emerald-700">데이터 복원</span>
+                          <span className="text-xs text-slate-400">.json 파일 업로드</span>
+                      </div>
                   </button>
                   <input type="file" ref={fileInputRef} onChange={handleRestore} accept=".json" className="hidden" />
                </div>
             </div>
           )}
         </div>
-         {statusMessage && (
-            <div className={`mx-6 mb-1 p-3 rounded-lg flex items-center gap-3 text-sm transition-all ${ statusMessage.type === 'success' ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : 'bg-red-50 border border-red-200 text-red-800' }`}>
-                {statusMessage.type === 'success' ? <CheckCircle className="w-5 h-5 flex-shrink-0" /> : <AlertCircle className="w-5 h-5 flex-shrink-0" />}
-                <span className="break-all">{statusMessage.text}</span>
+
+        {statusMessage && (
+            <div className={`mx-6 mb-2 p-3 rounded-lg flex items-center gap-3 text-sm font-medium animate-bounce-in ${ 
+                statusMessage.type === 'success' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-red-50 text-red-700 border border-red-200' 
+            }`}>
+                {statusMessage.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+                <span>{statusMessage.text}</span>
             </div>
         )}
-        <div className="p-4 border-t border-slate-100 bg-white rounded-b-2xl"><button onClick={onClose} className="w-full flex items-center justify-center gap-2 px-6 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-sm transition-all">닫기</button></div>
+
+        <div className="p-4 border-t border-slate-100 bg-white rounded-b-2xl">
+            <button onClick={onClose} className="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl transition-colors">
+                닫기
+            </button>
+        </div>
       </div>
     </div>
   );

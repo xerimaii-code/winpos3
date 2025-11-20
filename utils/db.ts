@@ -27,8 +27,7 @@ export const initDB = (): Promise<IDBDatabase> => {
       if (!db.objectStoreNames.contains(QUERY_HISTORY_STORE_NAME)) {
         db.createObjectStore(QUERY_HISTORY_STORE_NAME, { keyPath: 'id', autoIncrement: true });
       }
-      
-      // Clean up old stores if they exist from previous versions
+      // Remove unused stores
       if (db.objectStoreNames.contains('settingsStore')) {
           db.deleteObjectStore('settingsStore');
       }
@@ -99,7 +98,7 @@ export const getAllQueryHistory = async (): Promise<QueryHistoryItem[]> => {
         const transaction = db.transaction([QUERY_HISTORY_STORE_NAME], 'readonly');
         const store = transaction.objectStore(QUERY_HISTORY_STORE_NAME);
         const request = store.getAll();
-        request.onsuccess = () => resolve(request.result.sort((a, b) => b.timestamp - a.timestamp)); // Sort by newest first
+        request.onsuccess = () => resolve(request.result.sort((a, b) => b.timestamp - a.timestamp));
         request.onerror = () => reject(request.error);
     });
 };
@@ -117,45 +116,63 @@ export const deleteQueryHistory = async (id: number): Promise<void> => {
 
 // --- Data Backup & Restore ---
 export const exportData = async (): Promise<object> => {
-    const knowledge = await getKnowledge() || '';
-    const schema = await getDbSchema() || '';
-    const history = await getAllQueryHistory() || [];
+    const knowledge = await getKnowledge();
+    const schema = await getDbSchema();
+    const history = await getAllQueryHistory();
 
-    return { knowledge, schema, history };
+    return {
+        knowledge: knowledge || '',
+        schema: schema || '',
+        history: history || [],
+        backupDate: new Date().toISOString()
+    };
 };
 
 export const importData = async (data: any): Promise<void> => {
     if (!data || typeof data !== 'object') {
-        throw new Error("Invalid data format for import.");
+        throw new Error("유효하지 않은 데이터 형식입니다.");
     }
-    const { knowledge, schema, history } = data;
+    
+    // 필수 키 확인 (history는 없을 수도 있으므로 선택적으로 처리)
+    if (!('knowledge' in data) && !('schema' in data)) {
+        throw new Error("백업 파일에 필수 데이터(knowledge 또는 schema)가 없습니다.");
+    }
+
     const db = await initDB();
     return new Promise((resolve, reject) => {
-        const transaction = db.transaction([KNOWLEDGE_STORE_NAME, SCHEMA_STORE_NAME, QUERY_HISTORY_STORE_NAME], 'readwrite');
+        const transaction = db.transaction(
+            [KNOWLEDGE_STORE_NAME, SCHEMA_STORE_NAME, QUERY_HISTORY_STORE_NAME], 
+            'readwrite'
+        );
+        
         const knowledgeStore = transaction.objectStore(KNOWLEDGE_STORE_NAME);
         const schemaStore = transaction.objectStore(SCHEMA_STORE_NAME);
         const historyStore = transaction.objectStore(QUERY_HISTORY_STORE_NAME);
 
-        // Clear existing data
-        knowledgeStore.clear();
-        schemaStore.clear();
-        historyStore.clear();
+        // 1. Knowledge 복원
+        if (data.knowledge) {
+            knowledgeStore.put(data.knowledge, 'userKnowledge');
+        }
 
-        // Import new data
-        if (typeof knowledge === 'string') {
-            knowledgeStore.put(knowledge, 'userKnowledge');
+        // 2. Schema 복원
+        if (data.schema) {
+            schemaStore.put(data.schema, 'dbSchema');
         }
-        if (typeof schema === 'string') {
-            schemaStore.put(schema, 'dbSchema');
-        }
-        if (Array.isArray(history)) {
-            history.forEach((item: QueryHistoryItem) => {
-                // Ensure data types are correct before putting
-                if (item.id && item.name && item.query && item.timestamp) {
+
+        // 3. History 복원 (선택적, 기존 데이터를 유지할지 덮어쓸지 결정 필요하나 여기선 병합/추가 방식 사용)
+        // 사용자가 복원을 원하면 보통 덮어쓰기나 추가를 기대함. 여기서는 단순 put으로 덮어쓰거나 추가됨.
+        if (Array.isArray(data.history)) {
+            // 기존 히스토리 클리어 옵션을 줄 수도 있지만, 여기서는 안전하게 추가만 합니다.
+            // ID 충돌 방지를 위해 key(id)를 제거하고 새로 추가할 수도 있음.
+            // 하지만 완전 복원을 위해 clear 후 add 방식 채택
+            historyStore.clear(); 
+            data.history.forEach((item: QueryHistoryItem) => {
+                if (item.name && item.query) {
                     historyStore.put(item);
                 }
             });
         }
+
         transaction.oncomplete = () => resolve();
         transaction.onerror = () => reject(transaction.error);
     });

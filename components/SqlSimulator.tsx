@@ -4,9 +4,9 @@ import { Search, Database, Loader2, Code, Activity, XCircle, Settings, ChevronDo
 import { generateSqlFromNaturalLanguage, analyzeQueryResult } from '../services/geminiService';
 import { QueryResult } from '../types';
 import { SettingsModal } from './SettingsModal';
-import { getKnowledge, saveQueryHistory, getDbSchema } from '../utils/db';
+import { getKnowledge, saveQueryHistory, getDbSchema, saveDbSchema } from '../utils/db'; // saveDbSchema import 추가
 import { QueryHistoryModal } from './QueryHistoryModal';
-import { MOCK_USERS } from '../constants';
+import { MOCK_USERS, DEFAULT_KNOWLEDGE } from '../constants';
 
 export const SqlSimulator: React.FC = () => {
   const [input, setInput] = useState('');
@@ -26,15 +26,15 @@ export const SqlSimulator: React.FC = () => {
 
   const [showSql, setShowSql] = useState(false);
 
-  const handleTestConnection = useCallback(async () => {
+  const handleTestConnection = useCallback(async (forceRefreshSchema = false) => {
     if (!useRealApi) return;
 
     setTestLoading(true);
     setConnectionStatus('idle');
-    setResult(null);
-    setConnectedDbName('');
-    // Do not clear schema here, let it persist from IDB if available
-    // setDbSchema('');
+    
+    if (forceRefreshSchema) {
+        setConnectionMsg('DB 연결 및 스키마 정보 가져오는 중...');
+    }
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -62,44 +62,50 @@ export const SqlSimulator: React.FC = () => {
         setConnectedDbName(dbName);
         setConnectionMsg(`Server: ${serverVersion}...`);
         
-        const schemaQuery = `
-            SELECT 
-                t.TABLE_NAME, c.COLUMN_NAME, c.DATA_TYPE,
-                c.CHARACTER_MAXIMUM_LENGTH,
-                CASE WHEN k.CONSTRAINT_TYPE = 'PRIMARY KEY' THEN 'YES' ELSE 'NO' END as IS_PRIMARY_KEY
-            FROM INFORMATION_SCHEMA.TABLES t
-            JOIN INFORMATION_SCHEMA.COLUMNS c ON t.TABLE_NAME = c.TABLE_NAME
-            LEFT JOIN (
-                SELECT kcu.TABLE_NAME, kcu.COLUMN_NAME, tc.CONSTRAINT_TYPE
-                FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
-                JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc 
-                ON kcu.CONSTRAINT_NAME = tc.CONSTRAINT_NAME AND tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
-            ) k ON c.TABLE_NAME = k.TABLE_NAME AND c.COLUMN_NAME = k.COLUMN_NAME
-            WHERE t.TABLE_TYPE = 'BASE TABLE'
-            ORDER BY t.TABLE_NAME, c.ORDINAL_POSITION
-        `;
-        
-        const schemaResponse = await fetch('/api/query', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: schemaQuery }),
-        });
+        // 스키마가 비어있거나 강제 새로고침일 경우에만 스키마 조회
+        if (!dbSchema || forceRefreshSchema) {
+            const schemaQuery = `
+                SELECT 
+                    t.TABLE_NAME, c.COLUMN_NAME, c.DATA_TYPE,
+                    c.CHARACTER_MAXIMUM_LENGTH,
+                    CASE WHEN k.CONSTRAINT_TYPE = 'PRIMARY KEY' THEN 'YES' ELSE 'NO' END as IS_PRIMARY_KEY
+                FROM INFORMATION_SCHEMA.TABLES t
+                JOIN INFORMATION_SCHEMA.COLUMNS c ON t.TABLE_NAME = c.TABLE_NAME
+                LEFT JOIN (
+                    SELECT kcu.TABLE_NAME, kcu.COLUMN_NAME, tc.CONSTRAINT_TYPE
+                    FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+                    JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc 
+                    ON kcu.CONSTRAINT_NAME = tc.CONSTRAINT_NAME AND tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
+                ) k ON c.TABLE_NAME = k.TABLE_NAME AND c.COLUMN_NAME = k.COLUMN_NAME
+                WHERE t.TABLE_TYPE = 'BASE TABLE'
+                ORDER BY t.TABLE_NAME, c.ORDINAL_POSITION
+            `;
+            
+            const schemaResponse = await fetch('/api/query', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: schemaQuery }),
+            });
 
-        if (schemaResponse.ok) {
-            const schemaJson = await schemaResponse.json();
-            const rows = schemaJson.data;
-            const schemaMap: Record<string, string[]> = {};
-            rows.forEach((row: any) => {
-                if (!schemaMap[row.TABLE_NAME]) schemaMap[row.TABLE_NAME] = [];
-                const typeInfo = row.CHARACTER_MAXIMUM_LENGTH ? `${row.DATA_TYPE}(${row.CHARACTER_MAXIMUM_LENGTH})` : row.DATA_TYPE;
-                const pkInfo = row.IS_PRIMARY_KEY === 'YES' ? ' [PK]' : '';
-                schemaMap[row.TABLE_NAME].push(`${row.COLUMN_NAME} (${typeInfo})${pkInfo}`);
-            });
-            let learnedSchema = "";
-            Object.entries(schemaMap).forEach(([table, columns]) => {
-                learnedSchema += `Table '${table}': ${columns.join(', ')}\n`;
-            });
-            setDbSchema(learnedSchema);
+            if (schemaResponse.ok) {
+                const schemaJson = await schemaResponse.json();
+                const rows = schemaJson.data;
+                const schemaMap: Record<string, string[]> = {};
+                rows.forEach((row: any) => {
+                    if (!schemaMap[row.TABLE_NAME]) schemaMap[row.TABLE_NAME] = [];
+                    const typeInfo = row.CHARACTER_MAXIMUM_LENGTH ? `${row.DATA_TYPE}(${row.CHARACTER_MAXIMUM_LENGTH})` : row.DATA_TYPE;
+                    const pkInfo = row.IS_PRIMARY_KEY === 'YES' ? ' [PK]' : '';
+                    schemaMap[row.TABLE_NAME].push(`${row.COLUMN_NAME} (${typeInfo})${pkInfo}`);
+                });
+                let learnedSchema = "";
+                Object.entries(schemaMap).forEach(([table, columns]) => {
+                    learnedSchema += `Table '${table}': ${columns.join(', ')}\n`;
+                });
+                setDbSchema(learnedSchema);
+                // 자동으로 학습한 스키마도 IndexedDB에 저장해둠
+                await saveDbSchema(learnedSchema);
+                console.log("DB Schema fetched from DB and saved to IDB.");
+            }
         }
       } else {
         throw new Error("No data returned from DB");
@@ -108,32 +114,40 @@ export const SqlSimulator: React.FC = () => {
     } catch (e: any) {
       setConnectionStatus('error');
       if (e.name === 'AbortError') {
-        setConnectionMsg('연결 시간 초과 (Timeout).\n서버가 응답하지 않습니다. 방화벽(9876 포트)을 확인하세요.');
+        setConnectionMsg('연결 시간 초과 (Timeout).\n서버가 응답하지 않습니다.');
       } else {
         setConnectionMsg(`Connection Failed: ${e.message}`);
       }
     } finally {
       setTestLoading(false);
     }
-  }, [useRealApi]);
+  }, [useRealApi, dbSchema]); // dbSchema dependency added to avoid re-fetching if already exists
   
   const initializeAppState = useCallback(async () => {
     setLoading(true);
-    // 1. Load knowledge from IDB
-    const knowledge = await getKnowledge();
-    setCustomKnowledge(knowledge || '');
-    console.log("Knowledge loaded from IndexedDB.");
+    try {
+        // 1. Load knowledge from IDB. If empty, use DEFAULT_KNOWLEDGE
+        const knowledge = await getKnowledge();
+        setCustomKnowledge(knowledge || DEFAULT_KNOWLEDGE);
+        console.log("Knowledge initialized.");
 
-    // 2. Load schema from IDB
-    const schema = await getDbSchema();
-    if (schema) {
-        setDbSchema(schema);
-        console.log("DB Schema loaded from IndexedDB.");
+        // 2. Load schema from IDB
+        const schema = await getDbSchema();
+        if (schema) {
+            setDbSchema(schema);
+            console.log("DB Schema loaded from IndexedDB.");
+            // 스키마가 있으면 연결 테스트만 수행 (스키마 페치 X)
+            await handleTestConnection(false);
+        } else {
+            console.log("No DB Schema in IDB. Connecting to fetch...");
+            // 스키마가 없으면 연결 테스트 및 스키마 페치 수행
+            await handleTestConnection(true);
+        }
+    } catch (err) {
+        console.error("Init failed:", err);
+    } finally {
+        setLoading(false);
     }
-    
-    // 3. Connect to DB to check status and fetch fresh schema if it wasn't in IDB
-    await handleTestConnection();
-    setLoading(false);
   }, [handleTestConnection]);
 
   useEffect(() => {
@@ -171,7 +185,7 @@ export const SqlSimulator: React.FC = () => {
           const queryData = json.data || [];
           setResult({ sql, data: queryData });
 
-          if (queryData.length > 0 && naturalInput) { // Only analyze if it was a natural language query
+          if (queryData.length > 0 && naturalInput) { 
             setIsAnalyzing(true);
             const summary = await analyzeQueryResult(queryData);
             setResult(prev => prev ? { ...prev, summary } : null);
@@ -258,12 +272,28 @@ export const SqlSimulator: React.FC = () => {
         <div className="flex items-center justify-between gap-2 mb-4">
             <div className="flex items-center gap-2">{getStatusIndicator()}</div>
             <div className="flex items-center gap-2">
-                {useRealApi && <button onClick={handleTestConnection} disabled={testLoading || loading} className="p-2 rounded-lg bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors" title="서버 재연결">{testLoading ? <Loader2 className="w-5 h-5 animate-spin text-blue-600" /> : <Activity className="w-5 h-5" />}</button>}
+                {useRealApi && <button onClick={() => handleTestConnection(true)} disabled={testLoading || loading} className="p-2 rounded-lg bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors" title="DB 연결 및 스키마 새로고침">{testLoading ? <Loader2 className="w-5 h-5 animate-spin text-blue-600" /> : <Activity className="w-5 h-5" />}</button>}
                 <button onClick={() => setIsHistoryOpen(true)} className="p-2 rounded-lg bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors" title="쿼리 히스토리"><Bookmark className="w-5 h-5" /></button>
                 <button onClick={() => setIsSettingsOpen(true)} className="p-2 rounded-lg bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors" title="설정"><Settings className="w-5 h-5" /></button>
             </div>
         </div>
-        <div className="relative flex-1"><input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSimulate()} placeholder="상품명, 바코드 또는 질문..." className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl py-3 pl-10 pr-10 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all placeholder-slate-400 font-medium" /><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />{input && (<button onClick={handleClear} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-full"><X className="w-4 h-4" /></button>)}</div>
+        <div className="relative flex-1">
+            <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSimulate()} placeholder="상품명, 바코드 또는 질문..." className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl py-3 pl-10 pr-24 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all placeholder-slate-400 font-medium" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                {customKnowledge && (
+                    <div className="hidden md:flex items-center gap-1 text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded-full border border-rose-100 shadow-sm select-none cursor-help" title="심화 학습 내용이 질문에 반영됩니다">
+                        <BrainCircuit className="w-3 h-3" />
+                        <span>학습ON</span>
+                    </div>
+                )}
+                {input && (
+                    <button onClick={handleClear} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 transition-colors">
+                        <X className="w-4 h-4" />
+                    </button>
+                )}
+            </div>
+        </div>
         <div className="flex gap-2 mt-3"><button onClick={() => handleSimulate()} disabled={loading || isAnalyzing} className="flex-1 bg-rose-600 hover:bg-rose-700 text-white py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 disabled:opacity-70 disabled:active:scale-100">{loading || isAnalyzing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5 fill-current" />} {loading ? '실행 중...' : (isAnalyzing ? '분석 중...' : '실행')}</button><button onClick={() => alert("Barcode scanning not yet implemented.")} className="flex-1 bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md active:scale-95"><ScanBarcode className="w-5 h-5" /> SCAN</button></div>
       </div>
       {result && (
