@@ -1,74 +1,37 @@
-import { GuideStep } from './types';
 
-export const GUIDE_STEPS: GuideStep[] = [
-  {
-    id: 1,
-    title: "백엔드 서버 구축 (Backend Setup)",
-    description: "브라우저는 보안상 데이터베이스(MS SQL)에 직접 TCP/IP 접속을 할 수 없습니다. 반드시 중간 다리 역할을 하는 백엔드 서버(API Server)가 필요합니다.",
-    icon: "server",
-    codeSnippet: `// Node.js Express 예시
-const express = require('express');
-const app = express();`
-  },
-  {
-    id: 2,
-    title: "DB 드라이버 설치 (Driver Installation)",
-    description: "백엔드 서버 언어에 맞는 MS SQL 드라이버를 설치합니다. Node.js의 경우 'mssql', Python의 경우 'pyodbc' 등이 사용됩니다.",
-    icon: "database",
-    codeSnippet: `npm install mssql
-# 또는
-pip install pyodbc`
-  },
-  {
-    id: 3,
-    title: "API 엔드포인트 작성 (Create API)",
-    description: "프론트엔드가 데이터를 요청할 수 있는 주소(URL)를 만듭니다. 이 곳에서 실제 DB 쿼리가 실행됩니다.",
-    icon: "code",
-    codeSnippet: `app.get('/api/users', async (req, res) => {
-  const result = await sql.query('select * from users');
-  res.json(result.recordset);
-});`
-  },
-  {
-    id: 4,
-    title: "CORS 및 보안 설정 (Security)",
-    description: "프론트엔드(React)와 백엔드의 도메인이 다를 경우 CORS 허용 설정이 필요하며, DB 접속 정보는 환경변수(.env)로 관리해야 합니다.",
-    icon: "lock",
-    codeSnippet: `const config = {
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  server: 'localhost', 
-  database: 'MyDatabase'
-};`
-  },
-  {
-    id: 5,
-    title: "프론트엔드 호출 (Fetch Data)",
-    description: "React 앱에서 'fetch' 또는 'axios'를 사용하여 백엔드가 만들어둔 API 주소로 데이터를 요청합니다.",
-    icon: "globe",
-    codeSnippet: `// React Component
-useEffect(() => {
-  fetch('http://api-server.com/api/users')
-    .then(res => res.json())
-    .then(data => setUsers(data));
-}, []);`
-  },
-  {
-    id: 6,
-    title: "Vercel 배포 (Deploy to Vercel)",
-    description: "Vercel은 'Serverless Functions'를 제공합니다. 프로젝트의 'api' 폴더 내에 파일을 생성하면 자동으로 백엔드 엔드포인트가 되어 별도의 서버 설정 없이 배포됩니다.",
-    icon: "rocket",
-    codeSnippet: `// /api/users.js (Vercel Serverless Function)
-import sql from 'mssql';
+export const INITIAL_KNOWLEDGE = `항목,분석 내용,시사점
+DBMS,SQL Server (SQLOLEDB.1),높은 안정성과 트랜잭션 처리 능력을 요구하는 환경임.
+연결 정보,"User ID=sa, Password가 연결 문자열에 명시됨 (보안 주의 필요)",내부 LAN 또는 VPN 환경에서 주로 사용되는 레거시 시스템일 가능성이 있음.
+개발 환경,"Delphi/VCL 컴포넌트 (TADOConnection, TQuery, TTable) 및 BDE 언급",비교적 오래된 개발 환경에서 구축된 애플리케이션일 가능성이 높습니다.
+네트워크,IdTCPClient/IdTCPServer (Indy 컴포넌트) 사용,클라이언트/서버 통신 및 원격 데이터베이스 접속에 TCP/IP를 직접 사용하고 있음.
 
-export default async function handler(req, res) {
-  // Vercel 대시보드에서 환경변수(DB 접속정보) 설정 필수
-  await sql.connect(process.env.DB_CONNECTION_STRING);
-  const result = await sql.query('select * from users');
-  res.status(200).json(result.recordset);
-}`
-  }
-];
+상세 분석: 데이터 흐름 및 로직
+1. 재고(Jago) 관리 흐름
+재고는 PDA를 통해 임시로 입력되거나(pda_jago), 직접 업데이트됩니다.
+실시간 재고: update parts set curjago = curjago + :n1 쿼리를 통해 parts 테이블의 curjago 필드가 즉시 갱신됩니다.
+재고 실사/마감: 월별 마감(magam_yymm) 개념을 사용하며, 이월 재고(beforec_)를 기준 시점으로 설정하고, 이후 입고/출고(ipgod_, outd_) 및 보정(bojung_) 데이터를 합산하여 최종 재고를 확정합니다.
+
+2. 판매(Sale) 및 매출 집계 로직
+판매 데이터는 PDA 임시 테이블(pda_sale)을 거쳐 최종적으로 판매 마스터/상세 테이블에 저장되는 구조입니다.
+판매 준비: smart_order_ready 테이블은 판매를 확정하기 전의 임시 주문 데이터를 저장하는 데 사용되는 것으로 보입니다.
+매출 집계: 매우 상세한 정산 로직을 포함합니다.
+총 매출: sum(tmamoney1 - tbamoney1) (총 판매금액 - 반품금액)
+현금 매출: sum(tmamoney1 - tbamoney1 - cdmoney1 - samoney1 - mimoney1 - ccdc - pointuse - cashback_use - totenddc - cmsmoney) (총 매출에서 카드, 서비스, 미수금, 포인트 등 모든 비현금/할인 요소를 제외한 순 현금)
+카드 매출: sum(cdmoney1)
+
+3. 품목 정보 (Parts) 관리 로직
+parts 테이블은 시스템의 핵심 마스터 데이터입니다.
+가격/마진 관리:
+마진율 계산: money1 (판매가)과 money0vat (원가)를 이용해 marginrate를 계산합니다: ((money1 - money0vat) / money1) * 100
+가격 변동 기록: moneyhist 테이블에 이전/이후 원가 및 판매가를 기록하여 투명성을 확보합니다.
+품명 구성: 이전 질문에서 분석한 로직과 같이, 규격(spec) 정보 유무에 따라 품목 설명(descr)이 달라집니다.
+
+모듈,핵심 기능 및 목적,관련 테이블/쿼리
+재고 관리 (Inventory),"입고, 출고, 현재고 업데이트, 재고 실사, 월 마감 및 이월 재고 처리","pda_jago, parts.curjago, magam_yymm, beforec_, ipgod_, outd_, bojung_"
+판매/매출 관리 (Sales),"판매 거래 기록, 매출 집계, 정산 (현금, 카드, 포인트 등), 판매 준비","pda_sale, sale_mast, sale_ready, outm_yymm, outd_yymm"
+품목/마스터 정보 (Parts Info),"상품 상세 정보(가격, 규격, 마진율, 재고) 조회 및 업데이트, 가격 변동 이력 관리","parts, comp, moneyhist"
+시스템/설정,"사용자 및 관리자 로그인, 시스템 설정값(회원 연동, 포인트 정책 등) 조회","login, memb_config"
+`;
 
 export const MOCK_USERS = [
   { id: 1, name: "김철수", email: "chulsoo@example.com", role: "Admin", lastLogin: "2023-10-25" },

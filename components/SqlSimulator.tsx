@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Database, Loader2, Code, Wifi, WifiOff, Activity, CheckCircle2, XCircle, Server, BrainCircuit, ScanBarcode, X, Play, Settings, ChevronDown, ChevronUp, Zap, AlertTriangle } from 'lucide-react';
-import { MOCK_USERS } from '../constants';
+import { MOCK_USERS, INITIAL_KNOWLEDGE } from '../constants';
 import { generateSqlFromNaturalLanguage } from '../services/geminiService';
 import { QueryResult } from '../types';
 import { SettingsModal } from './SettingsModal';
-import { getGitUrl } from '../utils/db';
+import { getKnowledge, saveKnowledge } from '../utils/db';
 
 export const SqlSimulator: React.FC = () => {
   const [input, setInput] = useState('');
@@ -26,28 +26,20 @@ export const SqlSimulator: React.FC = () => {
   // 결과창 접기/펴기 (SQL 영역)
   const [showSql, setShowSql] = useState(false);
 
-  // 초기 로드: Git URL에서 학습 내용 가져오기
-  const loadKnowledgeFromGit = useCallback(async () => {
-    const url = await getGitUrl();
-    if (url) {
-      try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error('Failed to fetch from Git URL');
-        const text = await response.text();
-        setCustomKnowledge(text);
-        console.log("Knowledge loaded from Git.");
-      } catch (error) {
-        console.error("Failed to load knowledge from Git:", error);
-        setCustomKnowledge(''); // 실패 시 초기화
-      }
-    } else {
-        setCustomKnowledge(''); // URL 없으면 초기화
+  // 초기 로드: Local DB에서 학습 내용 가져오기 (없으면 하드코딩된 내용으로 초기화)
+  const loadKnowledge = useCallback(async () => {
+    let knowledge = await getKnowledge();
+    if (knowledge === null) {
+      console.log("No local knowledge found, seeding with initial knowledge.");
+      knowledge = INITIAL_KNOWLEDGE;
+      await saveKnowledge(knowledge);
     }
+    setCustomKnowledge(knowledge);
   }, []);
 
   useEffect(() => {
-    loadKnowledgeFromGit();
-  }, [loadKnowledgeFromGit]);
+    loadKnowledge();
+  }, [loadKnowledge]);
 
 
   const handleTestConnection = useCallback(async () => {
@@ -277,8 +269,9 @@ export const SqlSimulator: React.FC = () => {
       <SettingsModal 
         isOpen={isSettingsOpen} 
         onClose={() => setIsSettingsOpen(false)}
-        onUpdateKnowledge={(k) => setCustomKnowledge(k)}
-        onForceReload={loadKnowledgeFromGit}
+        initialKnowledge={customKnowledge}
+        onKnowledgeSaved={loadKnowledge}
+        dbSchema={dbSchema}
       />
 
       <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4 sticky top-16 z-30">

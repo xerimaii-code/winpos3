@@ -22,9 +22,4 @@ MySQL,"CASE WHEN spec IS NOT NULL AND spec <> ” THEN CONCAT(descr,�
 조건,로직 (IIf 문의 조건),품명 생성 방식 (결과),예시
 참,spec 필드가 $\text{NULL}$이 아니고 빈 문자열('')이 아닐 때,[descr] + 스페이스 + [규격],"""노트북 [i7]"""
 거짓,spec 필드가 $\text{NULL}$이거나 빈 문자열('')일 때,[descr],"""노트북"""
-SELECT dbo_comp.comname AS 거래처명, dbo_parts.barcode AS 바코드, IIf([spec]<>" ",[descr] & " " & "[" & [spec] & "]",[descr]) AS 품명, dbo_parts.money0vat AS 단가, dbo_parts.money1 AS 판가, dbo_parts.salemoney0 AS 행사가, dbo_parts.saleendday AS 행사종료일
-FROM dbo_comp INNER JOIN dbo_parts ON dbo_comp.comcode = dbo_parts.comcode
-WHERE (((dbo_comp.comname) Not Like "야채" And (dbo_comp.comname) Not Like "과일" And (dbo_comp.comname) Not Like "생선" And (dbo_comp.comname) Not Like "정육" And (dbo_comp.comname) Not Like "식품" And (dbo_comp.comname) Not Like "비식품" And (dbo_comp.comname) Not Like "기획" And (dbo_comp.comname) Not Like "경진청과") AND ((dbo_parts.barcode) Is Not Null) AND ((IIf([spec]<>" ",[descr] & " " & "[" & [spec] & "]",[descr])) Not Like "*---*") AND ((dbo_parts.money0vat) Not Like "0") AND ((dbo_parts.isuse)<>"0")) OR (((dbo_parts.barcode) Not Like "0000000*"))
-ORDER BY IIf([spec]<>" ",[descr] & " " & "[" & [spec] & "]",[descr]);
-
 
