@@ -139,10 +139,10 @@ export default async function handler(req, res) {
     const result = await pool.request().query(query);
     await pool.close();
     
-    // apiVersion 필드 추가 (배포 버전 확인용 v5.2)
+    // apiVersion 필드 추가 (배포 버전 확인용 v5.4)
     res.status(200).json({ 
       data: result.recordset,
-      apiVersion: 'v5.2 (Backend Updated)'
+      apiVersion: 'v5.4 (Backend Updated)'
     });
     
   } catch (error) {
@@ -151,7 +151,7 @@ export default async function handler(req, res) {
       error: 'Database Error', 
       details: error.message, 
       code: error.code,
-      apiVersion: 'v5.2 (Backend Updated)'
+      apiVersion: 'v5.4 (Backend Updated)'
     });
   }
 }`;
@@ -238,6 +238,7 @@ export default async function handler(req, res) {
       <section className="space-y-4">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center font-bold text-white">3</div>
+          {/* HTML 엔티티로 부등호(>)를 치환하여 JSX 파싱 에러 해결 */}
           <h3 className="text-xl font-semibold text-white">Vercel 환경변수 설정 (Settings &gt; Environment Variables)</h3>
         </div>
         
