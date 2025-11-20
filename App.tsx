@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { SqlSimulator } from './components/SqlSimulator';
 import { Database } from 'lucide-react';
@@ -9,7 +10,7 @@ const App: React.FC = () => {
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-lg border-b border-slate-200 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-blue-600 p-2 rounded-lg shadow-lg shadow-blue-500/20">
+            <div className="bg-indigo-600 p-2 rounded-lg shadow-lg shadow-indigo-500/20">
               <Database className="w-6 h-6 text-white" />
             </div>
             <div>
@@ -17,8 +18,8 @@ const App: React.FC = () => {
                 Winpos3
               </h1>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-mono text-blue-700 bg-blue-100 px-2 py-0.5 rounded border border-blue-200">
-                  v7.0 (Light Theme)
+                <span className="text-xs font-mono text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded border border-indigo-200">
+                  v8.0 (Deep Learning)
                 </span>
               </div>
             </div>

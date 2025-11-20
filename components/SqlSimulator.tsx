@@ -1,23 +1,35 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Database, Loader2, Code, Wifi, WifiOff, Activity, CheckCircle2, XCircle, Server, BrainCircuit, ScanBarcode, X } from 'lucide-react';
+import { Search, Database, Loader2, Code, Wifi, WifiOff, Activity, CheckCircle2, XCircle, Server, BrainCircuit, ScanBarcode, X, BookOpen } from 'lucide-react';
 import { MOCK_USERS } from '../constants';
 import { generateSqlFromNaturalLanguage } from '../services/geminiService';
 import { QueryResult } from '../types';
+import { LearningModal } from './LearningModal';
+import { getKnowledge } from '../utils/db';
 
 export const SqlSimulator: React.FC = () => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [testLoading, setTestLoading] = useState(false);
   const [result, setResult] = useState<QueryResult | null>(null);
-  // Set default to TRUE for auto-connection
   const [useRealApi, setUseRealApi] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [connectionMsg, setConnectionMsg] = useState('');
   const [connectedDbName, setConnectedDbName] = useState<string>('');
   const [backendVersion, setBackendVersion] = useState<string>('Checking...');
-  const [dbSchema, setDbSchema] = useState<string>(''); // 학습된 스키마 저장
+  const [dbSchema, setDbSchema] = useState<string>(''); 
+  
+  // 심화 학습 관련 상태
+  const [isLearningModalOpen, setIsLearningModalOpen] = useState(false);
+  const [customKnowledge, setCustomKnowledge] = useState<string>('');
 
-  // Function to test connectivity and learn schema
+  // 초기 로드 시 IndexedDB에서 학습 내용 가져오기
+  useEffect(() => {
+    getKnowledge().then(saved => {
+      if (saved) setCustomKnowledge(saved);
+    });
+  }, []);
+
   const handleTestConnection = useCallback(async () => {
     if (!useRealApi) return;
 
@@ -28,12 +40,10 @@ export const SqlSimulator: React.FC = () => {
     setBackendVersion('Checking...');
     setDbSchema('');
 
-    // 타임아웃 15초로 연장
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
     try {
-      // 1. 연결 및 DB 이름 확인 쿼리
       const testQuery = "SELECT @@VERSION as version, DB_NAME() as current_db";
       const response = await fetch('/api/query', {
         method: 'POST',
@@ -49,7 +59,6 @@ export const SqlSimulator: React.FC = () => {
 
       const json = await response.json();
       
-      // 백엔드 버전 확인 로직
       if (json.apiVersion) {
         setBackendVersion(json.apiVersion);
       } else {
@@ -65,7 +74,6 @@ export const SqlSimulator: React.FC = () => {
         setConnectedDbName(dbName);
         setConnectionMsg(`Server: ${serverVersion}...`);
         
-        // 2. 연결 성공 시 스키마 학습 (테이블 및 컬럼 정보 조회)
         const schemaQuery = `
             SELECT t.TABLE_NAME, c.COLUMN_NAME, c.DATA_TYPE
             FROM INFORMATION_SCHEMA.TABLES t
@@ -85,7 +93,6 @@ export const SqlSimulator: React.FC = () => {
             const schemaJson = await schemaResponse.json();
             const rows = schemaJson.data;
             
-            // 데이터 가공하여 AI 학습용 텍스트 생성
             const schemaMap: Record<string, string[]> = {};
             rows.forEach((row: any) => {
                 if (!schemaMap[row.TABLE_NAME]) {
@@ -99,9 +106,8 @@ export const SqlSimulator: React.FC = () => {
                 learnedSchema += `Table '${table}': ${columns.join(', ')}\n`;
             });
             
-            setDbSchema(learnedSchema); // 스키마 저장
+            setDbSchema(learnedSchema);
             
-            // UI에는 테이블 목록만 간단히 보여주기
             const simplifiedData = Object.keys(schemaMap).map(tableName => ({ TABLE_NAME: tableName, COLUMNS_COUNT: schemaMap[tableName].length }));
             setResult({
                 sql: "-- AI has learned the database structure successfully.",
@@ -131,7 +137,6 @@ export const SqlSimulator: React.FC = () => {
     }
   }, [useRealApi]);
 
-  // Auto-connect on mount
   useEffect(() => {
     if (useRealApi) {
       handleTestConnection();
@@ -145,8 +150,8 @@ export const SqlSimulator: React.FC = () => {
     setConnectionStatus('idle');
 
     try {
-      // 저장된 스키마(dbSchema)를 AI에게 전달
-      const sql = await generateSqlFromNaturalLanguage(input, dbSchema);
+      // DB 스키마 + 사용자가 입력한 심화 학습 내용(customKnowledge)을 함께 전달
+      const sql = await generateSqlFromNaturalLanguage(input, dbSchema, customKnowledge);
 
       if (useRealApi) {
         const controller = new AbortController();
@@ -168,8 +173,6 @@ export const SqlSimulator: React.FC = () => {
           }
 
           const json = await response.json();
-          
-          // 백엔드 버전 업데이트
           if (json.apiVersion) setBackendVersion(json.apiVersion);
 
           setResult({
@@ -188,7 +191,6 @@ export const SqlSimulator: React.FC = () => {
           });
         }
       } else {
-        // Mock mode
         await new Promise(resolve => setTimeout(resolve, 800));
         let filteredData = [...MOCK_USERS];
         setResult({ sql, data: filteredData });
@@ -210,7 +212,6 @@ export const SqlSimulator: React.FC = () => {
   };
 
   const handleBarcodeScan = () => {
-    // 실제 바코드 스캔 기능 대신 데모 동작
     alert("바코드 스캐너가 활성화되었습니다. (데모)");
     setInput("상품코드 880123456789 조회");
     setTimeout(() => handleSimulate(), 500);
@@ -218,16 +219,27 @@ export const SqlSimulator: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      <LearningModal 
+        isOpen={isLearningModalOpen} 
+        onClose={() => setIsLearningModalOpen(false)}
+        onUpdate={(knowledge) => setCustomKnowledge(knowledge)}
+      />
+
       {/* Controls & Info Card */}
       <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-6">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-6">
           <div className="flex items-start gap-4">
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-lg border border-blue-100">
+            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg border border-indigo-100">
               <BrainCircuit className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-xl font-bold text-slate-800">Winpos3 Query</h3>
+                {customKnowledge && (
+                   <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full border border-indigo-200">
+                     심화학습 적용됨
+                   </span>
+                )}
               </div>
               <p className="text-slate-500 mt-1 text-sm">
                 자연어로 조회하거나 바코드를 스캔하세요.
@@ -236,6 +248,15 @@ export const SqlSimulator: React.FC = () => {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+            {/* Deep Learning Button */}
+            <button
+              onClick={() => setIsLearningModalOpen(true)}
+              className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-all text-sm font-bold shadow-sm"
+            >
+               <BookOpen className="w-4 h-4" />
+               심화 학습
+            </button>
+
             {useRealApi && (
               <button
                 onClick={handleTestConnection}
@@ -260,7 +281,7 @@ export const SqlSimulator: React.FC = () => {
               }`}
             >
               {useRealApi ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
-              {useRealApi ? '실제 서버 (Online)' : '연습 모드 (Offline)'}
+              {useRealApi ? '실제 서버' : '연습 모드'}
             </button>
           </div>
         </div>
@@ -279,14 +300,14 @@ export const SqlSimulator: React.FC = () => {
                         <span className="text-blue-700 text-xs font-mono">{connectionMsg}</span>
                         {dbSchema && (
                              <span className="flex items-center gap-1 text-xs text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">
-                                <CheckCircle2 className="w-3 h-3" /> AI 학습 완료
+                                <CheckCircle2 className="w-3 h-3" /> 스키마 학습 완료
                              </span>
                         )}
                     </div>
                 </div>
                 <div className="bg-white px-3 py-2 rounded border border-slate-200 text-right shadow-sm">
                     <div className="text-[10px] uppercase text-slate-400 font-bold">API Version</div>
-                    <div className={`text-sm font-mono font-bold ${backendVersion.includes('v6.0') ? 'text-blue-600' : 'text-red-500'}`}>
+                    <div className={`text-sm font-mono font-bold ${backendVersion.includes('v8.0') ? 'text-blue-600' : 'text-red-500'}`}>
                         {backendVersion}
                     </div>
                 </div>
@@ -326,7 +347,7 @@ export const SqlSimulator: React.FC = () => {
             )}
           </div>
 
-          {/* Barcode Scan Button (Primary Action) */}
+          {/* Barcode Scan Button */}
           <button
             onClick={handleBarcodeScan}
             className="bg-slate-800 hover:bg-slate-900 text-white px-6 rounded-xl font-medium text-sm transition-all flex items-center gap-2 shadow-lg shadow-slate-500/20 active:scale-95"
