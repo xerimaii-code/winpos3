@@ -1,102 +1,103 @@
 
-
-import React, { useState, useEffect } from 'react';
-import { X, Save, BrainCircuit, Database, Loader2, AlertCircle, CheckCircle, Github, RefreshCw } from 'lucide-react';
-import { saveKnowledge, saveGitUrl, getGitUrl } from '../utils/db';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Save, BrainCircuit, Database, Loader2, AlertCircle, CheckCircle, HardDrive } from 'lucide-react';
+import { saveKnowledge, saveDbSchema, exportData, importData } from '../utils/db';
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialKnowledge: string;
-  onKnowledgeSaved: () => void;
+  onDataSaved: () => void;
   dbSchema: string;
+  setDbSchema: (schema: string) => void;
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, initialKnowledge, onKnowledgeSaved, dbSchema }) => {
-  const [activeTab, setActiveTab] = useState<'learning' | 'schema'>('learning');
+export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, initialKnowledge, onDataSaved, dbSchema, setDbSchema }) => {
+  const [activeTab, setActiveTab] = useState<'learning' | 'data'>('learning');
   const [knowledge, setKnowledge] = useState(initialKnowledge);
-  const [gitUrl, setGitUrl] = useState('');
+  const [localDbSchema, setLocalDbSchema] = useState(dbSchema);
   const [isSaving, setIsSaving] = useState(false);
-  const [isFetching, setIsFetching] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
         setKnowledge(initialKnowledge);
+        setLocalDbSchema(dbSchema);
         setStatusMessage(null); // Reset status on open
-        getGitUrl().then(url => setGitUrl(url || ''));
     }
-  }, [isOpen, initialKnowledge]);
+  }, [isOpen, initialKnowledge, dbSchema]);
 
   const showStatus = (type: 'success' | 'error', text: string, duration = 5000) => {
       setStatusMessage({ type, text });
       setTimeout(() => setStatusMessage(null), duration);
   };
-  
-  const toRawUrl = (url: string): string | null => {
-      if (!url || !url.includes('github.com')) return null;
-      try {
-        const urlObj = new URL(url);
-        
-        // Change hostname to raw if it's not already
-        if (urlObj.hostname === 'github.com') {
-            urlObj.hostname = 'raw.githubusercontent.com';
-            // Clean up path for blob URLs
-            urlObj.pathname = urlObj.pathname.replace('/blob/', '/');
-        }
-        
-        // Clean up path for /refs/heads/ which can appear in some copy-pasted URLs
-        urlObj.pathname = urlObj.pathname.replace('/refs/heads/', '/');
 
-        // Always remove search parameters (like tokens) for a permanent URL
-        urlObj.search = '';
-        
-        return urlObj.toString();
-      } catch {
-        return null; // Invalid URL format
-      }
-  };
-
-  const handleSaveToBrowser = async () => {
+  const handleSave = async () => {
     setIsSaving(true);
     setStatusMessage(null);
     try {
-      await saveKnowledge(knowledge); // Save knowledge content
-      await saveGitUrl(gitUrl);     // Save Git URL setting
-      onKnowledgeSaved();
-      showStatus('success', "학습 내용과 Git URL 설정이 브라우저에 저장되었습니다.");
+      await saveKnowledge(knowledge);
+      await saveDbSchema(localDbSchema);
+      setDbSchema(localDbSchema); // Update parent state immediately
+      showStatus('success', "학습 내용과 DB 스키마가 브라우저에 저장되었습니다.");
     } catch (e: any) {
-      console.error("Failed to save knowledge", e);
+      console.error("Failed to save data", e);
       showStatus('error', `저장 실패: ${e.message}`);
     } finally {
       setIsSaving(false);
     }
   };
   
-  const handleLoadFromGit = async () => {
-    setIsFetching(true);
-    setStatusMessage(null);
+  const handleBackup = async () => {
     try {
-      const rawUrl = toRawUrl(gitUrl);
-      if (!rawUrl) {
-        throw new Error("유효한 GitHub URL이 아닙니다. github.com 또는 raw.githubusercontent.com URL을 사용해주세요.");
-      }
-      
-      const response = await fetch(rawUrl, { cache: 'no-store' });
-      
-      if (!response.ok) {
-        throw new Error(`서버 응답 오류: ${response.status}`);
-      }
-      const text = await response.text();
-      setKnowledge(text);
-      // Fetched content is now in the editor, user can save it to browser if they wish.
-      showStatus('success', "Git에서 최신 내용을 성공적으로 불러왔습니다. '브라우저에 저장'을 눌러야 적용됩니다.");
+        const data = await exportData();
+        const jsonString = JSON.stringify(data, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `winpos3_backup_${new Date().toISOString().slice(0, 10)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showStatus('success', '데이터가 성공적으로 백업되었습니다.');
     } catch (e: any) {
-      console.error("Failed to load from Git", e);
-      showStatus('error', `불러오기 실패: ${e.message}`);
-    } finally {
-      setIsFetching(false);
+        showStatus('error', `백업 실패: ${e.message}`);
     }
+  };
+
+  const handleRestoreClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleRestore = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const text = e.target?.result;
+            if (typeof text !== 'string') throw new Error("File could not be read.");
+            const data = JSON.parse(text);
+            await importData(data);
+            showStatus('success', '데이터 복원 완료. 앱을 다시 시작합니다.');
+            setTimeout(() => {
+                onDataSaved(); // Reload parent state
+                onClose();
+            }, 2000);
+        } catch (error: any) {
+            showStatus('error', `복원 실패: ${error.message}`);
+        }
+    };
+    reader.onerror = () => {
+        showStatus('error', '파일을 읽는 중 오류가 발생했습니다.');
+    };
+    reader.readAsText(file);
+    // Reset file input so the same file can be selected again
+    if(event.target) event.target.value = '';
   };
 
   if (!isOpen) return null;
@@ -111,57 +112,60 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between p-6 border-b border-slate-100">
-          <div className="flex items-center gap-3"><div className="p-2 bg-rose-100 text-rose-600 rounded-lg"><BrainCircuit className="w-6 h-6" /></div><div><h2 className="text-xl font-bold text-slate-800">AI 심화 학습 및 설정</h2><p className="text-slate-500 text-sm">AI의 지식 베이스를 관리하고 DB 구조를 확인합니다.</p></div></div>
+          <div className="flex items-center gap-3"><div className="p-2 bg-rose-100 text-rose-600 rounded-lg"><BrainCircuit className="w-6 h-6" /></div><div><h2 className="text-xl font-bold text-slate-800">AI 설정 및 데이터 관리</h2><p className="text-slate-500 text-sm">AI의 지식과 DB 스키마를 관리하고 데이터를 백업/복원합니다.</p></div></div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-100"><X className="w-5 h-5" /></button>
         </div>
         <div className="flex rounded-t-lg overflow-hidden p-1 bg-slate-100 m-6 mb-0">
-          <TabButton id="learning" label="심화 학습" icon={<BrainCircuit className="w-4 h-4" />} />
-          <TabButton id="schema" label="DB 스키마" icon={<Database className="w-4 h-4" />} />
+          <TabButton id="learning" label="AI 학습" icon={<BrainCircuit className="w-4 h-4" />} />
+          <TabButton id="data" label="데이터 관리" icon={<HardDrive className="w-4 h-4" />} />
         </div>
         <div className="flex-1 p-6 pt-4 overflow-y-auto bg-slate-50">
           {activeTab === 'learning' && (
             <div className="animate-fade-in-fast space-y-6">
-              <div className="border-b border-slate-200 pb-6">
-                <h4 className="text-sm font-bold text-slate-700 mb-2">1. Git 동기화 (읽기 전용)</h4>
-                <p className="text-xs text-slate-500 mb-3">학습 내용의 '원본(Source of Truth)'은 GitHub에 있습니다. 수정은 GitHub에서 직접하고, 여기서는 최신 정보를 불러오기만 하세요.</p>
-                <div className="relative">
-                  <Github className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input type="text" value={gitUrl} onChange={(e) => setGitUrl(e.target.value)} placeholder="https://raw.githubusercontent.com/..." className="w-full bg-white border border-slate-300 rounded-lg py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500" />
-                </div>
-                 <div className="mt-3">
-                    <button onClick={handleLoadFromGit} disabled={isSaving || isFetching || !gitUrl.trim()} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-sm border border-slate-300 transition-all active:scale-95 disabled:opacity-50">
-                        {isFetching ? <Loader2 className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                        {isFetching ? '불러오는 중...' : "Git에서 최신 정보 불러오기"}
-                    </button>
-                </div>
-              </div>
-
               <div>
-                <h4 className="text-sm font-bold text-slate-700 mb-2">2. 사용자 정의 지식 편집</h4>
-                <p className="text-xs text-slate-500 mb-3">Git에서 불러온 내용을 확인하고, 로컬 테스트를 위해 임시 수정할 수 있습니다. 변경 내용은 브라우저에만 저장됩니다.</p>
-                <textarea value={knowledge} onChange={(e) => setKnowledge(e.target.value)} placeholder="예: '취소된 주문은 sale_status가 9번입니다.'" className="w-full h-40 p-4 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 resize-none text-sm leading-relaxed shadow-inner" />
-                <button onClick={handleSaveToBrowser} disabled={isSaving || isFetching} className="mt-3 w-full flex items-center justify-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-800 text-white rounded-lg font-bold text-sm shadow-lg shadow-slate-500/30 transition-all active:scale-95 disabled:opacity-50">
-                    {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-4 h-4" />}
-                    {isSaving ? '저장 중...' : "브라우저에 저장"}
-                </button>
+                <h4 className="text-sm font-bold text-slate-700 mb-2">심화 학습 내용</h4>
+                <p className="text-xs text-slate-500 mb-3">AI가 SQL 생성 시 참고할 비즈니스 규칙이나 특별 지식을 입력합니다.</p>
+                <textarea value={knowledge} onChange={(e) => setKnowledge(e.target.value)} placeholder="예: '취소된 주문은 sale_status가 9번입니다.'" className="w-full h-32 p-4 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 resize-y text-sm leading-relaxed shadow-inner" />
               </div>
-
-              {statusMessage && (
-                  <div className={`mt-4 p-3 rounded-lg flex items-center gap-3 text-sm ${ statusMessage.type === 'success' ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : 'bg-red-50 border border-red-200 text-red-800' }`}>
-                      {statusMessage.type === 'success' ? <CheckCircle className="w-5 h-5 flex-shrink-0" /> : <AlertCircle className="w-5 h-5 flex-shrink-0" />}
-                      <span className="break-all">{statusMessage.text}</span>
-                  </div>
-              )}
+              <div>
+                <h4 className="text-sm font-bold text-slate-700 mb-2">DB 스키마</h4>
+                <p className="text-xs text-slate-500 mb-3">앱이 자동으로 학습한 DB 구조입니다. 필요 시 직접 수정할 수 있습니다.</p>
+                <textarea value={localDbSchema} onChange={(e) => setLocalDbSchema(e.target.value)} readOnly={false} className="w-full h-40 p-4 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 resize-y text-xs font-mono text-slate-600 leading-relaxed shadow-inner" />
+              </div>
+              <button onClick={handleSave} disabled={isSaving} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-800 text-white rounded-lg font-bold text-sm shadow-lg shadow-slate-500/30 transition-all active:scale-95 disabled:opacity-50">
+                  {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-4 h-4" />}
+                  {isSaving ? '저장 중...' : "브라우저에 저장"}
+              </button>
             </div>
           )}
-          {activeTab === 'schema' && (
-            <div className="animate-fade-in-fast">
-              <h4 className="text-sm font-bold text-slate-700 mb-2">자동 학습된 DB 스키마 (읽기 전용)</h4>
-              <p className="text-xs text-slate-500 mb-3">앱이 DB에 연결될 때마다 자동으로 분석된 테이블 구조입니다. AI는 이 정보를 기반으로 쿼리를 생성합니다.</p>
-              <textarea value={dbSchema || "DB에 연결되지 않았거나 스키마를 불러올 수 없습니다."} readOnly className="w-full h-72 p-4 bg-slate-100 border border-slate-300 rounded-xl focus:outline-none resize-none text-xs font-mono text-slate-600 leading-relaxed shadow-inner" />
+          {activeTab === 'data' && (
+            <div className="animate-fade-in-fast text-center space-y-4 p-4">
+               <h4 className="text-base font-bold text-slate-700">데이터 백업 및 복원</h4>
+               <p className="text-sm text-slate-500 max-w-md mx-auto">
+                 AI 학습 내용, DB 스키마, 쿼리 히스토리를 포함한 모든 데이터를 하나의 파일로 내보내거나, 백업 파일에서 복원할 수 있습니다.
+               </p>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+                  <button onClick={handleBackup} className="w-full flex flex-col items-center justify-center gap-2 px-4 py-6 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-bold text-sm border border-blue-200 transition-all active:scale-95">
+                      <Database className="w-8 h-8 mb-2" />
+                      데이터 백업
+                      <span className="font-normal text-xs">(JSON 파일로 내보내기)</span>
+                  </button>
+                   <button onClick={handleRestoreClick} className="w-full flex flex-col items-center justify-center gap-2 px-4 py-6 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg font-bold text-sm border border-emerald-200 transition-all active:scale-95">
+                      <HardDrive className="w-8 h-8 mb-2" />
+                      데이터 복원
+                      <span className="font-normal text-xs">(백업 파일에서 가져오기)</span>
+                  </button>
+                  <input type="file" ref={fileInputRef} onChange={handleRestore} accept=".json" className="hidden" />
+               </div>
             </div>
           )}
         </div>
+         {statusMessage && (
+            <div className={`mx-6 mb-1 p-3 rounded-lg flex items-center gap-3 text-sm transition-all ${ statusMessage.type === 'success' ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : 'bg-red-50 border border-red-200 text-red-800' }`}>
+                {statusMessage.type === 'success' ? <CheckCircle className="w-5 h-5 flex-shrink-0" /> : <AlertCircle className="w-5 h-5 flex-shrink-0" />}
+                <span className="break-all">{statusMessage.text}</span>
+            </div>
+        )}
         <div className="p-4 border-t border-slate-100 bg-white rounded-b-2xl"><button onClick={onClose} className="w-full flex items-center justify-center gap-2 px-6 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-bold text-sm transition-all">닫기</button></div>
       </div>
     </div>

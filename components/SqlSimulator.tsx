@@ -1,11 +1,10 @@
 
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Database, Loader2, Code, Activity, XCircle, Settings, ChevronDown, ChevronUp, AlertTriangle, Play, ScanBarcode, X, Bookmark, BookmarkPlus, BrainCircuit } from 'lucide-react';
 import { generateSqlFromNaturalLanguage, analyzeQueryResult } from '../services/geminiService';
 import { QueryResult } from '../types';
 import { SettingsModal } from './SettingsModal';
-import { getKnowledge, saveQueryHistory, getGitUrl, saveKnowledge, saveGitUrl } from '../utils/db';
+import { getKnowledge, saveQueryHistory, getDbSchema } from '../utils/db';
 import { QueryHistoryModal } from './QueryHistoryModal';
 import { MOCK_USERS } from '../constants';
 
@@ -27,70 +26,6 @@ export const SqlSimulator: React.FC = () => {
 
   const [showSql, setShowSql] = useState(false);
 
-  const initializeKnowledge = useCallback(async () => {
-    let gitUrl = await getGitUrl();
-
-    if (!gitUrl) {
-        const defaultUrl = 'https://raw.githubusercontent.com/xerimaii-code/winpos3/refs/heads/main/winpos3.txt';
-        await saveGitUrl(defaultUrl);
-        gitUrl = defaultUrl;
-        console.log("Default Git URL has been set.");
-    }
-    
-    const toRawUrl = (url: string): string | null => {
-      if (!url || !url.includes('github.com')) return null;
-      try {
-        const urlObj = new URL(url);
-        
-        // Change hostname to raw if it's not already
-        if (urlObj.hostname === 'github.com') {
-            urlObj.hostname = 'raw.githubusercontent.com';
-            // Clean up path for blob URLs
-            urlObj.pathname = urlObj.pathname.replace('/blob/', '/');
-        }
-        
-        // Clean up path for /refs/heads/ which can appear in some copy-pasted URLs
-        urlObj.pathname = urlObj.pathname.replace('/refs/heads/', '/');
-
-        // Always remove search parameters (like tokens) for a permanent URL
-        urlObj.search = '';
-        
-        return urlObj.toString();
-      } catch {
-        return null; // Invalid URL format
-      }
-    };
-
-    if (gitUrl) {
-      const rawUrl = toRawUrl(gitUrl);
-      if (rawUrl) {
-        try {
-          const response = await fetch(rawUrl);
-          if (response.ok) {
-            const text = await response.text();
-            setCustomKnowledge(text);
-            await saveKnowledge(text); // 로컬 DB에 동기화
-            console.log("Knowledge loaded from Git URL.");
-            return;
-          } else {
-            console.warn(`Failed to fetch from Git URL (${response.status}), falling back to local storage.`);
-          }
-        } catch (error) {
-          console.error("Error fetching from Git URL, falling back to local storage:", error);
-        }
-      }
-    }
-    
-    // Fallback to local storage
-    const knowledge = await getKnowledge();
-    setCustomKnowledge(knowledge || '');
-    console.log("Knowledge loaded from local storage.");
-  }, []);
-
-  useEffect(() => {
-    initializeKnowledge();
-  }, [initializeKnowledge]);
-
   const handleTestConnection = useCallback(async () => {
     if (!useRealApi) return;
 
@@ -98,7 +33,8 @@ export const SqlSimulator: React.FC = () => {
     setConnectionStatus('idle');
     setResult(null);
     setConnectedDbName('');
-    setDbSchema('');
+    // Do not clear schema here, let it persist from IDB if available
+    // setDbSchema('');
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -180,10 +116,29 @@ export const SqlSimulator: React.FC = () => {
       setTestLoading(false);
     }
   }, [useRealApi]);
+  
+  const initializeAppState = useCallback(async () => {
+    setLoading(true);
+    // 1. Load knowledge from IDB
+    const knowledge = await getKnowledge();
+    setCustomKnowledge(knowledge || '');
+    console.log("Knowledge loaded from IndexedDB.");
+
+    // 2. Load schema from IDB
+    const schema = await getDbSchema();
+    if (schema) {
+        setDbSchema(schema);
+        console.log("DB Schema loaded from IndexedDB.");
+    }
+    
+    // 3. Connect to DB to check status and fetch fresh schema if it wasn't in IDB
+    await handleTestConnection();
+    setLoading(false);
+  }, [handleTestConnection]);
 
   useEffect(() => {
-    if (useRealApi) handleTestConnection();
-  }, []);
+    initializeAppState();
+  }, [initializeAppState]);
 
   const handleSimulate = async (queryToRun?: string) => {
     const naturalInput = typeof queryToRun === 'string' ? '' : input;
@@ -289,8 +244,9 @@ export const SqlSimulator: React.FC = () => {
         isOpen={isSettingsOpen} 
         onClose={() => setIsSettingsOpen(false)}
         initialKnowledge={customKnowledge}
-        onKnowledgeSaved={initializeKnowledge}
+        onDataSaved={initializeAppState}
         dbSchema={dbSchema}
+        setDbSchema={setDbSchema}
       />
       <QueryHistoryModal
         isOpen={isHistoryOpen}
