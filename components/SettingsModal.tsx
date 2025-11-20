@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Save, BookOpen, Trash2, Camera, Settings, Database, Github, Download, Upload, Code2, Globe, Copy, CheckCircle2, FileCode } from 'lucide-react';
+import { X, Save, BookOpen, Trash2, Camera, Settings, Database, Github, Download, Upload, Code2, Globe, Copy, CheckCircle2, FileCode, ListChecks, AlertTriangle } from 'lucide-react';
 import { saveKnowledge, getKnowledge, saveDeviceSetting, getDeviceSetting, saveGitUrl, getGitUrl } from '../utils/db';
 
 interface SettingsModalProps {
@@ -181,19 +181,13 @@ fetchWinposData("SELECT * FROM goods WHERE gname LIKE '%사과%'")
                 <Github className="w-4 h-4" />
                 Git 동기화
             </button>
-            <button 
-                onClick={() => setActiveTab('camera')}
-                className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'camera' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-            >
-                <Camera className="w-4 h-4" />
-                카메라 설정
-            </button>
+            {/* Camera Tab Removed */}
              <button 
                 onClick={() => setActiveTab('api')}
                 className={`py-3 px-4 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'api' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
             >
                 <Globe className="w-4 h-4" />
-                API 연동
+                API & 통합
             </button>
              <button 
                 onClick={() => setActiveTab('schema')}
@@ -287,14 +281,14 @@ fetchWinposData("SELECT * FROM goods WHERE gname LIKE '%사과%'")
             )}
 
             {activeTab === 'api' && (
-                <div className="space-y-4">
-                     <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
+                <div className="space-y-8">
+                     {/* API Fetch Method */}
+                     <div className="bg-indigo-50 p-5 rounded-xl border border-indigo-100">
                         <h4 className="text-indigo-900 font-bold text-sm mb-2 flex items-center gap-2">
-                            <Code2 className="w-4 h-4" /> 클라이언트 연동 코드 (JavaScript)
+                            <Globe className="w-4 h-4" /> 방법 1: API 호출 방식 (간편)
                         </h4>
                         <p className="text-xs text-indigo-700 mb-3 leading-relaxed">
-                            이 서버의 API를 다른 웹사이트나 앱에서 사용할 수 있습니다. 아래 코드를 복사하여 사용하세요.
-                            (CORS가 허용되어 있어 어디서든 호출 가능합니다.)
+                            가장 쉬운 방법입니다. 기존 웹앱에서 이 프로젝트의 URL로 요청을 보냅니다.
                         </p>
                         <div className="relative">
                             <pre className="bg-slate-900 text-blue-100 p-4 rounded-lg text-xs font-mono overflow-x-auto leading-relaxed">
@@ -308,45 +302,60 @@ fetchWinposData("SELECT * FROM goods WHERE gname LIKE '%사과%'")
                             </button>
                         </div>
                     </div>
+
+                    {/* Integration Checklist */}
+                    <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+                         <h4 className="text-slate-800 font-bold text-sm mb-3 flex items-center gap-2">
+                            <ListChecks className="w-4 h-4 text-green-600" /> 
+                            방법 2: 소스 코드 통합 시 필수 체크리스트
+                        </h4>
+                        <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+                            이 프로젝트의 코드를 기존 웹앱(Vercel 배포)으로 복사해 넣는 경우, 
+                            <strong>기존 웹앱의 Vercel 환경변수(Environment Variables)</strong>에도 아래 항목들을 반드시 추가해야 합니다.
+                        </p>
+
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between bg-slate-50 p-2 rounded border border-slate-100">
+                                <span className="text-xs font-mono font-bold text-slate-700">API_KEY</span>
+                                <span className="text-[10px] text-slate-400">Google Gemini Key</span>
+                            </div>
+                            <div className="flex items-center justify-between bg-slate-50 p-2 rounded border border-slate-100">
+                                <span className="text-xs font-mono font-bold text-slate-700">DB_USER</span>
+                                <span className="text-[10px] text-slate-400">MS SQL 아이디</span>
+                            </div>
+                            <div className="flex items-center justify-between bg-slate-50 p-2 rounded border border-slate-100">
+                                <span className="text-xs font-mono font-bold text-slate-700">DB_PASSWORD</span>
+                                <span className="text-[10px] text-slate-400">MS SQL 비밀번호</span>
+                            </div>
+                            <div className="flex items-center justify-between bg-slate-50 p-2 rounded border border-slate-100">
+                                <span className="text-xs font-mono font-bold text-slate-700">DB_SERVER</span>
+                                <span className="text-[10px] text-slate-400">kjmartII.iptime.org</span>
+                            </div>
+                             <div className="flex items-center justify-between bg-slate-50 p-2 rounded border border-slate-100">
+                                <span className="text-xs font-mono font-bold text-slate-700">DB_PORT</span>
+                                <span className="text-[10px] text-slate-400">9876</span>
+                            </div>
+                            <div className="flex items-center justify-between bg-slate-50 p-2 rounded border border-slate-100">
+                                <span className="text-xs font-mono font-bold text-slate-700">DB_NAME</span>
+                                <span className="text-[10px] text-slate-400">winpos3</span>
+                            </div>
+                        </div>
+
+                        <div className="mt-4 flex items-start gap-2 p-3 bg-amber-50 text-amber-800 rounded-lg text-xs">
+                            <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                            <p>
+                                기존 앱에 이미 <code>DB_USER</code> 등의 변수가 있다면, 이름을 <code>WINPOS_DB_USER</code> 등으로 변경하고 코드(api/query.js)도 맞춰서 수정해야 충돌을 피할 수 있습니다.
+                            </p>
+                        </div>
+                    </div>
                 </div>
             )}
 
             {activeTab === 'camera' && (
                 <div className="space-y-6">
-                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-                        <h3 className="text-sm font-bold text-slate-800 mb-4">바코드 스캔 카메라 선택</h3>
-                        <div className="space-y-3">
-                            {cameras.length > 0 ? cameras.map((camera) => (
-                                <label key={camera.deviceId} className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-slate-50 transition-colors has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50">
-                                    <input
-                                        type="radio"
-                                        name="camera"
-                                        value={camera.deviceId}
-                                        checked={selectedCameraId === camera.deviceId}
-                                        onChange={(e) => setSelectedCameraId(e.target.value)}
-                                        className="w-4 h-4 text-indigo-600 border-slate-300 focus:ring-indigo-500"
-                                    />
-                                    <div>
-                                        <div className="text-sm font-medium text-slate-900">{camera.label || `Camera ${camera.deviceId.slice(0, 5)}...`}</div>
-                                        <div className="text-xs text-slate-500">ID: {camera.deviceId.slice(0, 10)}...</div>
-                                    </div>
-                                </label>
-                            )) : (
-                                <div className="text-center py-8 text-slate-500 text-sm">
-                                    연결된 카메라를 찾을 수 없습니다.
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                    <div className="flex justify-end">
-                        <button
-                            onClick={handleSaveCamera}
-                            disabled={cameraLoading}
-                            className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-sm shadow-md transition-all active:scale-95"
-                        >
-                            <Save className="w-4 h-4" />
-                            카메라 설정 저장
-                        </button>
+                    {/* Camera UI Removed but logic kept for structure integrity if reverted */}
+                     <div className="text-center py-8 text-slate-500 text-sm">
+                        카메라 설정 기능은 제외되었습니다. (기본 카메라 사용)
                     </div>
                 </div>
             )}
