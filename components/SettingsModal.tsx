@@ -1,7 +1,6 @@
 
-
 import React, { useState, useEffect } from 'react';
-import { X, Save, BrainCircuit, Database, Loader2, AlertCircle, CheckCircle, Github } from 'lucide-react';
+import { X, Save, BrainCircuit, Database, Loader2, AlertCircle, CheckCircle, Github, RefreshCw } from 'lucide-react';
 import { saveKnowledge, saveGitUrl, getGitUrl } from '../utils/db';
 
 interface SettingsModalProps {
@@ -17,6 +16,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
   const [knowledge, setKnowledge] = useState(initialKnowledge);
   const [gitUrl, setGitUrl] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isFetching, setIsFetching] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
@@ -43,6 +43,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
     }
   };
 
+  const toRawUrl = (url: string): string | null => {
+      if (!url || !url.includes('github.com')) return null;
+      try {
+        const urlObj = new URL(url);
+        if (urlObj.hostname === 'raw.githubusercontent.com') return url;
+        
+        urlObj.hostname = 'raw.githubusercontent.com';
+        urlObj.pathname = urlObj.pathname.replace('/blob/', '/');
+        return urlObj.toString();
+      } catch {
+        return null;
+      }
+  };
+
   const handleSaveKnowledge = async () => {
     setIsSaving(true);
     setStatusMessage(null);
@@ -55,6 +69,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
       showStatus('error', `저장 실패: ${e.message}`);
     } finally {
       setIsSaving(false);
+    }
+  };
+  
+  const handleLoadFromGit = async () => {
+    setIsFetching(true);
+    setStatusMessage(null);
+    try {
+      const rawUrl = toRawUrl(gitUrl);
+      if (!rawUrl) {
+        throw new Error("유효한 GitHub URL이 아닙니다. github.com 또는 raw.githubusercontent.com URL을 사용해주세요.");
+      }
+      
+      const response = await fetch(rawUrl, { cache: 'no-store' });
+      
+      if (!response.ok) {
+        throw new Error(`서버 응답 오류: ${response.status}`);
+      }
+      const text = await response.text();
+      setKnowledge(text);
+      await saveKnowledge(text);
+      onKnowledgeSaved();
+      showStatus('success', "Git에서 최신 내용을 성공적으로 불러왔습니다.");
+    } catch (e: any) {
+      console.error("Failed to load from Git", e);
+      showStatus('error', `불러오기 실패: ${e.message}`);
+    } finally {
+      setIsFetching(false);
     }
   };
 
@@ -109,7 +150,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
                 <h4 className="text-sm font-bold text-slate-700 mb-2">1. 사용자 정의 지식 편집</h4>
                 <p className="text-xs text-slate-500 mb-3">업무 규칙, 데이터 코드의 의미 등을 AI에게 알려주세요. 변경 후 아래 버튼으로 저장해야 적용됩니다.</p>
                 <textarea value={knowledge} onChange={(e) => setKnowledge(e.target.value)} placeholder="예: '취소된 주문은 sale_status가 9번입니다.'" className="w-full h-40 p-4 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 resize-none text-sm leading-relaxed shadow-inner" />
-                <button onClick={handleSaveKnowledge} disabled={isSaving} className="mt-3 w-full flex items-center justify-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-800 text-white rounded-lg font-bold text-sm shadow-lg shadow-slate-500/30 transition-all active:scale-95 disabled:opacity-50">
+                <button onClick={handleSaveKnowledge} disabled={isSaving || isFetching} className="mt-3 w-full flex items-center justify-center gap-2 px-6 py-3 bg-slate-700 hover:bg-slate-800 text-white rounded-lg font-bold text-sm shadow-lg shadow-slate-500/30 transition-all active:scale-95 disabled:opacity-50">
                     {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-4 h-4" />}
                     {isSaving ? '저장 중...' : "브라우저에 저장"}
                 </button>
@@ -122,10 +163,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
                   <Github className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input type="text" value={gitUrl} onChange={(e) => setGitUrl(e.target.value)} placeholder="https://github.com/user/repo/blob/main/knowledge.txt" className="w-full bg-white border border-slate-300 rounded-lg py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-rose-500" />
                 </div>
-                 <button onClick={handleGitSync} disabled={isSaving || !gitUrl.trim()} className="mt-3 w-full flex items-center justify-center gap-2 px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold text-sm shadow-lg shadow-rose-500/30 transition-all active:scale-95 disabled:opacity-50">
-                    {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Github className="w-4 h-4" />}
-                    {isSaving ? '준비 중...' : "Git으로 저장 준비"}
-                </button>
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                    <button onClick={handleLoadFromGit} disabled={isSaving || isFetching || !gitUrl.trim()} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-bold text-sm border border-slate-300 transition-all active:scale-95 disabled:opacity-50">
+                        {isFetching ? <Loader2 className="w-5 h-5 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                        {isFetching ? '불러오는 중...' : "최신 정보 불러오기"}
+                    </button>
+                    <button onClick={handleGitSync} disabled={isSaving || isFetching || !gitUrl.trim()} className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold text-sm shadow-lg shadow-rose-500/30 transition-all active:scale-95 disabled:opacity-50">
+                        {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Github className="w-4 h-4" />}
+                        {isSaving ? '준비 중...' : "Git으로 저장 준비"}
+                    </button>
+                </div>
               </div>
 
               {statusMessage && (
