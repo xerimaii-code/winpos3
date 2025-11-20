@@ -6,13 +6,12 @@ const config = {
   password: process.env.DB_PASSWORD,
   server: process.env.DB_SERVER,
   port: parseInt(process.env.DB_PORT || '1433', 10),
-  // 우선순위: DB_NAME(사용자 설정) > DB_DATABASE > 기본값(winpos3)
   database: process.env.DB_NAME || process.env.DB_DATABASE || 'winpos3',
   options: {
     encrypt: process.env.DB_ENCRYPT === 'true', 
     trustServerCertificate: true,
-    connectionTimeout: 10000, // 10초 연결 제한
-    requestTimeout: 10000     // 10초 쿼리 제한
+    connectionTimeout: 10000,
+    requestTimeout: 10000
   },
 };
 
@@ -36,19 +35,15 @@ export default async function handler(req, res) {
 
   try {
     const { query } = req.body;
-
-    if (!query) {
-      return res.status(400).json({ error: 'Query is required' });
-    }
+    if (!query) return res.status(400).json({ error: 'Query is required' });
 
     const pool = await sql.connect(config);
     const result = await pool.request().query(query);
     await pool.close();
     
-    // apiVersion 필드 추가 (배포 버전 확인용 v9.1)
     res.status(200).json({ 
       data: result.recordset,
-      apiVersion: 'v9.1 (Backend Updated)'
+      apiVersion: 'v9.4 (Backend Updated)'
     });
     
   } catch (error) {
@@ -57,7 +52,7 @@ export default async function handler(req, res) {
       error: 'Database Error', 
       details: error.message, 
       code: error.code,
-      apiVersion: 'v9.1 (Backend Updated)'
+      apiVersion: 'v9.4 (Backend Updated)'
     });
   }
 }
