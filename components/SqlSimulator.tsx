@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Database, Loader2, Code, Wifi, WifiOff, Activity, CheckCircle2, XCircle, Server, BrainCircuit, ScanBarcode, X, BookOpen } from 'lucide-react';
+import { Search, Database, Loader2, Code, Wifi, WifiOff, Activity, CheckCircle2, XCircle, Server, BrainCircuit, ScanBarcode, X, Play, Settings, ChevronDown, ChevronUp, Zap, AlertTriangle } from 'lucide-react';
 import { MOCK_USERS } from '../constants';
 import { generateSqlFromNaturalLanguage } from '../services/geminiService';
 import { QueryResult } from '../types';
-import { LearningModal } from './LearningModal';
-import { getKnowledge } from '../utils/db';
+import { SettingsModal } from './SettingsModal';
+import { getKnowledge, getDeviceSetting } from '../utils/db';
 
 export const SqlSimulator: React.FC = () => {
   const [input, setInput] = useState('');
@@ -19,14 +19,21 @@ export const SqlSimulator: React.FC = () => {
   const [backendVersion, setBackendVersion] = useState<string>('Checking...');
   const [dbSchema, setDbSchema] = useState<string>(''); 
   
-  // 심화 학습 관련 상태
-  const [isLearningModalOpen, setIsLearningModalOpen] = useState(false);
+  // 설정 모달 관련
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [customKnowledge, setCustomKnowledge] = useState<string>('');
+  const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
 
-  // 초기 로드 시 IndexedDB에서 학습 내용 가져오기
+  // 결과창 접기/펴기 (SQL 영역)
+  const [showSql, setShowSql] = useState(false);
+
+  // 초기 로드: IndexedDB에서 학습 내용 & 설정 가져오기
   useEffect(() => {
     getKnowledge().then(saved => {
       if (saved) setCustomKnowledge(saved);
+    });
+    getDeviceSetting('selectedCameraId').then(id => {
+      if (id) setSelectedCameraId(id);
     });
   }, []);
 
@@ -74,10 +81,20 @@ export const SqlSimulator: React.FC = () => {
         setConnectedDbName(dbName);
         setConnectionMsg(`Server: ${serverVersion}...`);
         
+        // 스키마 상세 조회 (PK, 타입 포함)
         const schemaQuery = `
-            SELECT t.TABLE_NAME, c.COLUMN_NAME, c.DATA_TYPE
+            SELECT 
+                t.TABLE_NAME, 
+                c.COLUMN_NAME, 
+                c.DATA_TYPE,
+                c.CHARACTER_MAXIMUM_LENGTH,
+                k.CONSTRAINT_TYPE
             FROM INFORMATION_SCHEMA.TABLES t
             JOIN INFORMATION_SCHEMA.COLUMNS c ON t.TABLE_NAME = c.TABLE_NAME
+            LEFT JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu 
+                ON c.TABLE_NAME = kcu.TABLE_NAME AND c.COLUMN_NAME = kcu.COLUMN_NAME
+            LEFT JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS k 
+                ON kcu.CONSTRAINT_NAME = k.CONSTRAINT_NAME AND k.CONSTRAINT_TYPE = 'PRIMARY KEY'
             WHERE t.TABLE_TYPE = 'BASE TABLE'
             ORDER BY t.TABLE_NAME, c.ORDINAL_POSITION
         `;
@@ -98,7 +115,9 @@ export const SqlSimulator: React.FC = () => {
                 if (!schemaMap[row.TABLE_NAME]) {
                     schemaMap[row.TABLE_NAME] = [];
                 }
-                schemaMap[row.TABLE_NAME].push(`${row.COLUMN_NAME} (${row.DATA_TYPE})`);
+                const typeInfo = row.CHARACTER_MAXIMUM_LENGTH ? `${row.DATA_TYPE}(${row.CHARACTER_MAXIMUM_LENGTH})` : row.DATA_TYPE;
+                const pkInfo = row.CONSTRAINT_TYPE === 'PRIMARY KEY' ? ' [PK]' : '';
+                schemaMap[row.TABLE_NAME].push(`${row.COLUMN_NAME} (${typeInfo})${pkInfo}`);
             });
 
             let learnedSchema = "";
@@ -108,9 +127,13 @@ export const SqlSimulator: React.FC = () => {
             
             setDbSchema(learnedSchema);
             
-            const simplifiedData = Object.keys(schemaMap).map(tableName => ({ TABLE_NAME: tableName, COLUMNS_COUNT: schemaMap[tableName].length }));
+            // 간단한 요약만 결과로 표시
+            const simplifiedData = Object.keys(schemaMap).map(tableName => ({ 
+                Table: tableName, 
+                Columns: schemaMap[tableName].length 
+            }));
             setResult({
-                sql: "-- AI has learned the database structure successfully.",
+                sql: "-- AI has analyzed the database structure including PKs and Data Types.",
                 data: simplifiedData
             });
         } else {
@@ -147,10 +170,9 @@ export const SqlSimulator: React.FC = () => {
     if (!input.trim()) return;
     setLoading(true);
     setResult(null);
-    setConnectionStatus('idle');
+    // setConnectionStatus('idle'); // Keep connection status, just show loading
 
     try {
-      // DB 스키마 + 사용자가 입력한 심화 학습 내용(customKnowledge)을 함께 전달
       const sql = await generateSqlFromNaturalLanguage(input, dbSchema, customKnowledge);
 
       if (useRealApi) {
@@ -211,213 +233,224 @@ export const SqlSimulator: React.FC = () => {
     setResult(null);
   };
 
-  const handleBarcodeScan = () => {
-    alert("바코드 스캐너가 활성화되었습니다. (데모)");
+  const handleBarcodeScan = async () => {
+    const camId = await getDeviceSetting('selectedCameraId');
+    alert(`바코드 스캔 활성화\n사용 카메라 ID: ${camId ? camId : '기본 카메라'}\n(데모: 상품코드 입력)`);
     setInput("상품코드 880123456789 조회");
-    setTimeout(() => handleSimulate(), 500);
+  };
+
+  // 상태 표시 UI 결정
+  const getStatusIndicator = () => {
+    if (loading) {
+      return (
+        <div className="flex items-center gap-2 px-3 py-1 bg-blue-100 border border-blue-200 text-blue-700 rounded-full animate-pulse">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          <span className="text-xs font-bold">RUNNING...</span>
+        </div>
+      );
+    }
+    if (connectionStatus === 'success') {
+      return (
+        <div className="flex items-center gap-2 px-3 py-1 bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-full">
+          <div className="relative">
+            <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full" />
+            <div className="absolute top-0 left-0 w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping opacity-75" />
+          </div>
+          <span className="text-xs font-bold">ONLINE ({connectedDbName})</span>
+        </div>
+      );
+    }
+    if (connectionStatus === 'error') {
+      return (
+        <div className="flex items-center gap-2 px-3 py-1 bg-red-100 border border-red-200 text-red-700 rounded-full">
+          <XCircle className="w-3.5 h-3.5" />
+          <span className="text-xs font-bold">OFFLINE</span>
+        </div>
+      );
+    }
+    return (
+      <div className="flex items-center gap-2 px-3 py-1 bg-slate-100 border border-slate-200 text-slate-500 rounded-full">
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        <span className="text-xs font-bold">CONNECTING...</span>
+      </div>
+    );
   };
 
   return (
-    <div className="space-y-6">
-      <LearningModal 
-        isOpen={isLearningModalOpen} 
-        onClose={() => setIsLearningModalOpen(false)}
-        onUpdate={(knowledge) => setCustomKnowledge(knowledge)}
+    <div className="space-y-4 pb-20">
+      <SettingsModal 
+        isOpen={isSettingsOpen} 
+        onClose={() => setIsSettingsOpen(false)}
+        onUpdateKnowledge={(k) => setCustomKnowledge(k)}
+        currentSchema={dbSchema}
       />
 
-      {/* Controls & Info Card */}
-      <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-6">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-6">
-          <div className="flex items-start gap-4">
-            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg border border-indigo-100">
-              <BrainCircuit className="w-6 h-6" />
+      {/* Header Control Area */}
+      <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4 sticky top-16 z-30">
+        <div className="flex items-center justify-between gap-2 mb-4">
+            {/* Left: Status Indicator */}
+            <div className="flex items-center gap-2">
+                 {getStatusIndicator()}
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-xl font-bold text-slate-800">Winpos3 Query</h3>
-                {customKnowledge && (
-                   <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full border border-indigo-200">
-                     심화학습 적용됨
-                   </span>
+
+            {/* Right: Utility Buttons */}
+            <div className="flex items-center gap-2">
+                {useRealApi && (
+                <button
+                    onClick={handleTestConnection}
+                    disabled={testLoading || loading}
+                    className="p-2 rounded-lg bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors"
+                    title="서버 재연결"
+                >
+                    {testLoading ? <Loader2 className="w-5 h-5 animate-spin text-blue-600" /> : <Activity className="w-5 h-5" />}
+                </button>
                 )}
-              </div>
-              <p className="text-slate-500 mt-1 text-sm">
-                자연어로 조회하거나 바코드를 스캔하세요.
-              </p>
+                <button
+                    onClick={() => setIsSettingsOpen(true)}
+                    className="p-2 rounded-lg bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors"
+                    title="설정"
+                >
+                    <Settings className="w-5 h-5" />
+                </button>
             </div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-            {/* Deep Learning Button */}
-            <button
-              onClick={() => setIsLearningModalOpen(true)}
-              className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-all text-sm font-bold shadow-sm"
-            >
-               <BookOpen className="w-4 h-4" />
-               심화 학습
-            </button>
-
-            {useRealApi && (
-              <button
-                onClick={handleTestConnection}
-                disabled={testLoading}
-                className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all text-sm font-medium whitespace-nowrap"
-              >
-                {testLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Activity className="w-4 h-4" />}
-                {testLoading ? '연결 중...' : '서버 재연결'}
-              </button>
-            )}
-
-            <button
-              onClick={() => {
-                  setUseRealApi(!useRealApi);
-                  setResult(null);
-                  setConnectionStatus('idle');
-              }}
-              className={`flex items-center justify-center gap-3 px-4 py-2 rounded-lg border transition-all duration-300 text-sm font-medium ${
-                useRealApi 
-                  ? 'bg-green-600 text-white border-green-500 shadow-md hover:bg-green-700' 
-                  : 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              {useRealApi ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
-              {useRealApi ? '실제 서버' : '연습 모드'}
-            </button>
-          </div>
         </div>
 
-        {/* Connection Status Banner */}
-        {useRealApi && connectionStatus === 'success' && (
-            <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4 flex flex-col md:flex-row md:items-center gap-4 animate-fade-in">
-                <div className="p-3 bg-white rounded-full text-blue-500 border border-blue-100 shadow-sm self-start md:self-center">
-                    <Server className="w-6 h-6" />
-                </div>
-                <div className="flex-1">
-                    <h4 className="text-blue-900 font-bold text-lg flex items-center gap-2">
-                        Connected to: <span className="underline underline-offset-4">{connectedDbName}</span>
-                    </h4>
-                    <div className="flex flex-col sm:flex-row gap-2 mt-1">
-                        <span className="text-blue-700 text-xs font-mono">{connectionMsg}</span>
-                        {dbSchema && (
-                             <span className="flex items-center gap-1 text-xs text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200">
-                                <CheckCircle2 className="w-3 h-3" /> 스키마 학습 완료
-                             </span>
-                        )}
-                    </div>
-                </div>
-                <div className="bg-white px-3 py-2 rounded border border-slate-200 text-right shadow-sm">
-                    <div className="text-[10px] uppercase text-slate-400 font-bold">API Version</div>
-                    <div className={`text-sm font-mono font-bold ${backendVersion.includes('v8.0') ? 'text-blue-600' : 'text-red-500'}`}>
-                        {backendVersion}
-                    </div>
-                </div>
-            </div>
-        )}
-
-        {useRealApi && connectionStatus === 'error' && (
-             <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-4 animate-fade-in">
-                <XCircle className="w-6 h-6 text-red-500 mt-1 flex-shrink-0" />
-                <div>
-                    <h4 className="text-red-800 font-bold">연결 실패</h4>
-                    <p className="text-red-600 text-sm mt-1 whitespace-pre-wrap">{connectionMsg}</p>
-                </div>
-            </div>
-        )}
-
-        {/* Search Input Area */}
-        <div className="flex gap-2">
+        {/* Input Area */}
+        <div className="flex gap-2 items-center">
           <div className="relative flex-1">
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSimulate()}
-              placeholder={useRealApi ? "상품명, 바코드 또는 질문을 입력하세요..." : "예: '매출 상위 10개 보여줘'"}
-              className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl py-4 pl-12 pr-12 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder-slate-400 shadow-inner font-medium"
+              placeholder="상품명, 바코드 또는 질문..."
+              className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl py-3 pl-10 pr-10 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all placeholder-slate-400 font-medium"
             />
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
-            
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
             {input && (
               <button 
                 onClick={handleClear}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-200 transition-colors"
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-full"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             )}
           </div>
-
-          {/* Barcode Scan Button */}
-          <button
-            onClick={handleBarcodeScan}
-            className="bg-slate-800 hover:bg-slate-900 text-white px-6 rounded-xl font-medium text-sm transition-all flex items-center gap-2 shadow-lg shadow-slate-500/20 active:scale-95"
-            title="바코드 스캔"
-          >
-            <ScanBarcode className="w-6 h-6" />
-            <span className="hidden sm:inline">SCAN</span>
-          </button>
+        </div>
+        
+        {/* Action Buttons (Swapped: Execute First, Scan Second) */}
+        <div className="flex gap-2 mt-3">
+             <button
+                onClick={handleSimulate}
+                disabled={loading}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 disabled:opacity-70 disabled:active:scale-100"
+            >
+                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5 fill-current" />}
+                {loading ? '실행 중...' : '실행'}
+            </button>
+            <button
+                onClick={handleBarcodeScan}
+                className="flex-1 bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md active:scale-95"
+            >
+                <ScanBarcode className="w-5 h-5" />
+                SCAN
+            </button>
         </div>
       </div>
 
-      {/* Results Area */}
+      {/* Results Area (Mobile First: Results before Query) */}
       {result && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
-          {/* SQL Query View */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-            <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center gap-2">
-              <Code className="w-4 h-4 text-blue-600" />
-              <span className="text-sm font-mono text-slate-600 font-bold">Generated SQL</span>
+        <div className="space-y-4 animate-fade-in">
+          
+          {/* 1. Result Data (First) */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-[200px]">
+            <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                  <Database className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-bold text-slate-700">
+                    조회 결과 <span className="text-slate-400 font-normal">({result.data.length}건)</span>
+                  </span>
+              </div>
             </div>
-            <div className="p-4 font-mono text-sm text-slate-700 overflow-auto flex-1 whitespace-pre-wrap bg-slate-50/50">
-              {result.sql}
-            </div>
-          </div>
-
-          {/* Data Table View */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-            <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center gap-2">
-              <Database className="w-4 h-4 text-blue-600" />
-              <span className="text-sm font-mono text-slate-600 font-bold">
-                {result.error ? 'Error' : `Result Data (${result.data.length} rows)`}
-              </span>
-            </div>
-            <div className="p-0 overflow-auto flex-1 min-h-[300px] max-h-[600px]">
+            
+            <div className="p-0 flex-1 bg-slate-50/30">
               {result.error ? (
-                <div className="p-6 text-red-600 text-sm font-mono whitespace-pre-wrap bg-red-50 h-full">
+                <div className="p-6 text-red-600 text-sm font-mono whitespace-pre-wrap bg-red-50 h-full flex items-center justify-center text-center">
+                  <AlertTriangle className="w-6 h-6 mx-auto mb-2 text-red-500" />
                   {result.error}
                 </div>
               ) : (
-                <table className="w-full text-left text-sm text-slate-600">
-                  <thead className="bg-slate-100 text-slate-700 uppercase font-semibold sticky top-0 shadow-sm">
-                    <tr>
-                      {result.data.length > 0 ? Object.keys(result.data[0]).map(key => (
-                        <th key={key} className="px-4 py-3 whitespace-nowrap border-b border-slate-200 bg-slate-100">{key}</th>
-                      )) : (
-                        <th className="px-4 py-3 border-b border-slate-200">Result</th>
-                      )}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {result.data.length > 0 ? result.data.map((row, idx) => (
-                      <tr key={idx} className="hover:bg-blue-50/50 transition-colors">
-                        {Object.values(row).map((val, vIdx) => (
-                          <td key={vIdx} className="px-4 py-3 max-w-xs truncate border-r border-slate-100 last:border-0">
-                             {val === null ? <span className="text-slate-400 italic">NULL</span> : (typeof val === 'object' ? JSON.stringify(val) : val?.toString())}
-                          </td>
-                        ))}
-                      </tr>
-                    )) : (
-                      <tr>
-                        <td colSpan={5} className="px-4 py-12 text-center text-slate-400">
-                          데이터가 없습니다.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                <>
+                    {/* Mobile Card View */}
+                    <div className="block md:hidden p-3 space-y-3">
+                        {result.data.length > 0 ? result.data.map((row, idx) => (
+                            <div key={idx} className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm space-y-2">
+                                {Object.entries(row).map(([key, val], vIdx) => (
+                                    <div key={vIdx} className="flex justify-between items-start border-b border-slate-50 last:border-0 pb-1 last:pb-0">
+                                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wide w-1/3 truncate">{key}</span>
+                                        <span className="text-sm font-medium text-slate-800 text-right w-2/3 break-words">
+                                            {val === null ? <span className="text-slate-300">NULL</span> : (typeof val === 'object' ? JSON.stringify(val) : val?.toString())}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        )) : (
+                             <div className="py-8 text-center text-slate-400 text-sm">데이터가 없습니다.</div>
+                        )}
+                    </div>
+
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block overflow-x-auto">
+                        <table className="w-full text-left text-sm text-slate-600">
+                        <thead className="bg-slate-100 text-slate-700 uppercase font-semibold sticky top-0">
+                            <tr>
+                            {result.data.length > 0 ? Object.keys(result.data[0]).map(key => (
+                                <th key={key} className="px-4 py-3 whitespace-nowrap border-b border-slate-200 bg-slate-100">{key}</th>
+                            )) : <th className="px-4 py-3 border-b border-slate-200">Result</th>}
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {result.data.length > 0 ? result.data.map((row, idx) => (
+                            <tr key={idx} className="hover:bg-blue-50/50 transition-colors">
+                                {Object.values(row).map((val, vIdx) => (
+                                <td key={vIdx} className="px-4 py-3 max-w-xs truncate border-r border-slate-100 last:border-0">
+                                    {val === null ? <span className="text-slate-300 italic">NULL</span> : (typeof val === 'object' ? JSON.stringify(val) : val?.toString())}
+                                </td>
+                                ))}
+                            </tr>
+                            )) : (
+                            <tr>
+                                <td colSpan={100} className="px-4 py-12 text-center text-slate-400">데이터가 없습니다.</td>
+                            </tr>
+                            )}
+                        </tbody>
+                        </table>
+                    </div>
+                </>
               )}
             </div>
           </div>
+
+          {/* 2. Generated SQL (Second - Collapsible) */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <button 
+                onClick={() => setShowSql(!showSql)}
+                className="w-full bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between hover:bg-slate-100 transition-colors"
+            >
+               <div className="flex items-center gap-2">
+                    <Code className="w-4 h-4 text-slate-500" />
+                    <span className="text-xs font-bold text-slate-500 uppercase">Generated Query</span>
+               </div>
+               {showSql ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+            </button>
+            
+            {showSql && (
+                <div className="p-4 font-mono text-xs text-slate-600 bg-slate-50/50 border-t border-slate-100 overflow-x-auto whitespace-pre-wrap">
+                {result.sql}
+                </div>
+            )}
+          </div>
+
         </div>
       )}
     </div>
