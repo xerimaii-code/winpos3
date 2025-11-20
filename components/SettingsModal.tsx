@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Save, BrainCircuit, Database, Loader2, AlertCircle, CheckCircle, HardDrive, FileJson, Upload } from 'lucide-react';
+import { X, Save, BrainCircuit, Database, Loader2, AlertCircle, CheckCircle, HardDrive, FileJson, Upload, Camera, RefreshCw } from 'lucide-react';
 import { saveKnowledge, saveDbSchema, exportData, importData } from '../utils/db';
 
 interface SettingsModalProps {
@@ -12,21 +12,62 @@ interface SettingsModalProps {
   setDbSchema: (schema: string) => void;
 }
 
+interface VideoDevice {
+    id: string;
+    label: string;
+}
+
 export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, initialKnowledge, onDataSaved, dbSchema, setDbSchema }) => {
-  const [activeTab, setActiveTab] = useState<'learning' | 'data'>('learning');
+  const [activeTab, setActiveTab] = useState<'learning' | 'data' | 'camera'>('learning');
   const [knowledge, setKnowledge] = useState(initialKnowledge);
   const [localDbSchema, setLocalDbSchema] = useState(dbSchema);
   const [isSaving, setIsSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Camera States
+  const [devices, setDevices] = useState<VideoDevice[]>([]);
+  const [selectedCameraId, setSelectedCameraId] = useState('');
+  const [cameraLoading, setCameraLoading] = useState(false);
+
   useEffect(() => {
     if (isOpen) {
         setKnowledge(initialKnowledge);
         setLocalDbSchema(dbSchema);
         setStatusMessage(null);
+        loadCameras();
     }
   }, [isOpen, initialKnowledge, dbSchema]);
+
+  const loadCameras = async () => {
+      setCameraLoading(true);
+      try {
+        const savedId = localStorage.getItem('winpos3_preferred_camera');
+        if (savedId) setSelectedCameraId(savedId);
+
+        if (window.Html5Qrcode) {
+            const cameras = await window.Html5Qrcode.getCameras();
+            if (cameras && cameras.length) {
+                const formatted = cameras.map((c: any) => ({ id: c.id, label: c.label || `Camera ${c.id.slice(0,5)}` }));
+                setDevices(formatted);
+                if (!savedId && formatted.length > 0) {
+                    setSelectedCameraId(formatted[0].id);
+                }
+            }
+        }
+      } catch (e) {
+          console.error("Camera Load Error", e);
+      } finally {
+          setCameraLoading(false);
+      }
+  };
+
+  const handleCameraSave = () => {
+      if (selectedCameraId) {
+          localStorage.setItem('winpos3_preferred_camera', selectedCameraId);
+          showStatus('success', '기본 카메라 설정이 저장되었습니다.');
+      }
+  };
 
   const showStatus = (type: 'success' | 'error', text: string, duration = 3000) => {
       setStatusMessage({ type, text });
@@ -125,11 +166,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
         <div className="flex items-center justify-between p-6 border-b border-slate-100">
           <div className="flex items-center gap-3">
               <div className="p-2 bg-rose-100 text-rose-600 rounded-lg">
-                  {activeTab === 'learning' ? <BrainCircuit className="w-6 h-6" /> : <HardDrive className="w-6 h-6" />}
+                  {activeTab === 'learning' ? <BrainCircuit className="w-6 h-6" /> : activeTab === 'data' ? <HardDrive className="w-6 h-6" /> : <Camera className="w-6 h-6" />}
               </div>
               <div>
                   <h2 className="text-xl font-bold text-slate-800">설정 및 데이터</h2>
-                  <p className="text-slate-500 text-sm">AI 지식 관리 및 데이터 백업/복원</p>
+                  <p className="text-slate-500 text-sm">AI 지식, 데이터 관리 및 하드웨어 설정</p>
               </div>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-100"><X className="w-5 h-5" /></button>
@@ -138,6 +179,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
         <div className="flex border-b border-slate-200">
           <TabButton id="learning" label="AI 학습" icon={<BrainCircuit className="w-4 h-4" />} />
           <TabButton id="data" label="데이터 관리" icon={<Database className="w-4 h-4" />} />
+          <TabButton id="camera" label="카메라 설정" icon={<Camera className="w-4 h-4" />} />
         </div>
 
         <div className="flex-1 p-6 overflow-y-auto bg-slate-50">
@@ -218,6 +260,59 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
                   <input type="file" ref={fileInputRef} onChange={handleRestore} accept=".json" className="hidden" />
                </div>
             </div>
+          )}
+
+          {activeTab === 'camera' && (
+              <div className="space-y-6 animate-fade-in">
+                  <div className="bg-slate-100 rounded-xl p-5">
+                      <h4 className="text-base font-bold text-slate-800 mb-4 flex items-center gap-2">
+                          <Camera className="w-5 h-5 text-slate-600" /> 기본 카메라 설정
+                      </h4>
+                      <div className="space-y-4">
+                          {cameraLoading ? (
+                              <div className="text-center py-4 text-slate-500 flex items-center justify-center gap-2">
+                                  <Loader2 className="w-4 h-4 animate-spin" /> 카메라 불러오는 중...
+                              </div>
+                          ) : devices.length > 0 ? (
+                              <div className="flex flex-col gap-2">
+                                  <label className="text-sm font-medium text-slate-600">사용할 카메라 선택</label>
+                                  <select 
+                                      value={selectedCameraId} 
+                                      onChange={(e) => setSelectedCameraId(e.target.value)}
+                                      className="w-full p-3 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500"
+                                  >
+                                      {devices.map(d => (
+                                          <option key={d.id} value={d.id}>{d.label}</option>
+                                      ))}
+                                  </select>
+                                  <p className="text-xs text-slate-500 mt-1">
+                                      * 선택한 카메라는 바코드 스캔 시 기본으로 사용됩니다.
+                                  </p>
+                              </div>
+                          ) : (
+                              <div className="text-center py-4 text-red-500 bg-red-50 rounded-lg text-sm">
+                                  사용 가능한 카메라를 찾을 수 없거나 권한이 없습니다.
+                              </div>
+                          )}
+
+                          <div className="flex justify-end pt-4">
+                             <button 
+                                onClick={loadCameras}
+                                className="mr-2 px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 text-sm font-bold flex items-center gap-2"
+                             >
+                                <RefreshCw className="w-4 h-4" /> 새로고침
+                             </button>
+                             <button 
+                                onClick={handleCameraSave}
+                                disabled={!selectedCameraId}
+                                className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 text-sm font-bold shadow-md disabled:opacity-50"
+                             >
+                                설정 저장
+                             </button>
+                          </div>
+                      </div>
+                  </div>
+              </div>
           )}
         </div>
 

@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Database, Loader2, Code, Activity, XCircle, Settings, ChevronDown, ChevronUp, AlertTriangle, Play, ScanBarcode, X, Bookmark, BookmarkPlus, BrainCircuit } from 'lucide-react';
+import { Search, Database, Loader2, Code, Activity, XCircle, Settings, ChevronDown, ChevronUp, AlertTriangle, Play, ScanBarcode, X, Bookmark, BookmarkPlus, BrainCircuit, Trash2, PlayCircle, Clock } from 'lucide-react';
 import { generateSqlFromNaturalLanguage, analyzeQueryResult } from '../services/geminiService';
 import { QueryResult } from '../types';
 import { SettingsModal } from './SettingsModal';
-import { getKnowledge, saveQueryHistory, getDbSchema, saveDbSchema } from '../utils/db';
+import { getKnowledge, saveQueryHistory, getDbSchema, saveDbSchema, getAllQueryHistory, deleteQueryHistory, QueryHistoryItem } from '../utils/db';
 import { QueryHistoryModal } from './QueryHistoryModal';
 import { BarcodeScannerModal } from './BarcodeScannerModal'; 
 import { MOCK_USERS, DEFAULT_KNOWLEDGE } from '../constants';
@@ -27,6 +27,14 @@ export const SqlSimulator: React.FC = () => {
   const [customKnowledge, setCustomKnowledge] = useState<string>('');
 
   const [showSql, setShowSql] = useState(false);
+  
+  // Quick Actions (Query History)
+  const [quickActions, setQuickActions] = useState<QueryHistoryItem[]>([]);
+
+  const fetchQuickActions = useCallback(async () => {
+      const history = await getAllQueryHistory();
+      setQuickActions(history);
+  }, []);
 
   const handleTestConnection = useCallback(async (forceRefreshSchema = false) => {
     if (!useRealApi) return;
@@ -139,12 +147,14 @@ export const SqlSimulator: React.FC = () => {
             console.log("No DB Schema in IDB. Connecting to fetch...");
             await handleTestConnection(true);
         }
+        
+        await fetchQuickActions();
     } catch (err) {
         console.error("Init failed:", err);
     } finally {
         setLoading(false);
     }
-  }, [handleTestConnection]);
+  }, [handleTestConnection, fetchQuickActions]);
 
   useEffect(() => {
     initializeAppState();
@@ -219,19 +229,33 @@ export const SqlSimulator: React.FC = () => {
     const name = prompt("이 쿼리를 어떤 이름으로 저장하시겠습니까?", input);
     if (name) {
         await saveQueryHistory({ name, query: result.sql });
-        alert("쿼리가 저장되었습니다.");
+        await fetchQuickActions();
+        alert("쿼리가 빠른 실행 목록에 저장되었습니다.");
     }
   };
   
   const handleUseQuery = (name: string, query: string) => {
     setInput(name);
-    handleSimulate(query); // 저장된 쿼리는 바로 실행
+    handleSimulate(query);
     setIsHistoryOpen(false);
   };
 
   const handleScanComplete = (decodedText: string) => {
     setInput(decodedText);
     setIsScannerOpen(false);
+  };
+
+  const handleQuickRun = (item: QueryHistoryItem) => {
+      setInput(item.name);
+      handleSimulate(item.query);
+  };
+
+  const handleQuickDelete = async (e: React.MouseEvent, id: number) => {
+      e.stopPropagation();
+      if (window.confirm("이 항목을 삭제하시겠습니까?")) {
+          await deleteQueryHistory(id);
+          await fetchQuickActions();
+      }
   };
 
   const getStatusIndicator = () => {
@@ -280,13 +304,33 @@ export const SqlSimulator: React.FC = () => {
         onScan={handleScanComplete}
       />
 
+      {/* Quick Actions (Query History Pills) */}
+      {quickActions.length > 0 && (
+          <div className="flex flex-wrap gap-2 px-1 animate-fade-in">
+              {quickActions.map(item => (
+                  <div key={item.id} 
+                       onClick={() => handleQuickRun(item)}
+                       className="group flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-full text-xs font-bold text-slate-600 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 cursor-pointer transition-all shadow-sm"
+                  >
+                      <PlayCircle className="w-3.5 h-3.5" />
+                      <span>{item.name}</span>
+                      <button 
+                        onClick={(e) => handleQuickDelete(e, item.id!)}
+                        className="ml-1 p-0.5 rounded-full text-slate-400 hover:bg-red-100 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                      >
+                          <X className="w-3 h-3" />
+                      </button>
+                  </div>
+              ))}
+          </div>
+      )}
+
       {/* Execution Window (Input & Buttons) */}
       <div className="bg-white border border-slate-200 shadow-sm rounded-xl p-4 sticky top-16 z-30">
         <div className="flex items-center justify-between gap-2 mb-4">
             <div className="flex items-center gap-2">{getStatusIndicator()}</div>
             <div className="flex items-center gap-2">
                 {useRealApi && <button onClick={() => handleTestConnection(true)} disabled={testLoading || loading} className="p-2 rounded-lg bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors" title="DB 연결 및 스키마 새로고침">{testLoading ? <Loader2 className="w-5 h-5 animate-spin text-blue-600" /> : <Activity className="w-5 h-5" />}</button>}
-                <button onClick={() => setIsHistoryOpen(true)} className="p-2 rounded-lg bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors" title="쿼리 히스토리"><Bookmark className="w-5 h-5" /></button>
                 <button onClick={() => setIsSettingsOpen(true)} className="p-2 rounded-lg bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors" title="설정"><Settings className="w-5 h-5" /></button>
             </div>
         </div>
@@ -356,7 +400,7 @@ export const SqlSimulator: React.FC = () => {
                 {!result.error && result.sql.trim() && (
                     <button onClick={(e) => { e.stopPropagation(); handleSaveQuery(); }} className='flex items-center gap-1.5 text-xs text-slate-500 hover:text-rose-600 transition-colors font-semibold mr-2'>
                         <BookmarkPlus className='w-3.5 h-3.5' />
-                        Save
+                        Save Query
                     </button>
                 )}
                 <div className="p-1 rounded-full hover:bg-slate-200">{showSql ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}</div>
