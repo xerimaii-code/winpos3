@@ -1,10 +1,11 @@
 
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Database, Loader2, Code, Activity, XCircle, Settings, ChevronDown, ChevronUp, AlertTriangle, Play, ScanBarcode, X, Bookmark, BookmarkPlus, BrainCircuit } from 'lucide-react';
 import { generateSqlFromNaturalLanguage, analyzeQueryResult } from '../services/geminiService';
 import { QueryResult } from '../types';
 import { SettingsModal } from './SettingsModal';
-import { getKnowledge, saveQueryHistory } from '../utils/db';
+import { getKnowledge, saveQueryHistory, getGitUrl, saveKnowledge, saveGitUrl } from '../utils/db';
 import { QueryHistoryModal } from './QueryHistoryModal';
 import { MOCK_USERS } from '../constants';
 
@@ -27,9 +28,53 @@ export const SqlSimulator: React.FC = () => {
   const [showSql, setShowSql] = useState(false);
 
   const initializeKnowledge = useCallback(async () => {
+    let gitUrl = await getGitUrl();
+
+    if (!gitUrl) {
+        const defaultUrl = 'https://raw.githubusercontent.com/xerimaii-code/winpos3/refs/heads/main/winpos3.txt?token=GHSAT0AAAAAADLZDNXRHWU4HAQDXEFZP5FW2I64SQQ';
+        await saveGitUrl(defaultUrl);
+        gitUrl = defaultUrl;
+        console.log("Default Git URL has been set.");
+    }
+    
+    const toRawUrl = (url: string): string | null => {
+      if (!url || !url.includes('github.com')) return null;
+      try {
+        const urlObj = new URL(url);
+        if (urlObj.hostname === 'raw.githubusercontent.com') return url;
+        
+        urlObj.hostname = 'raw.githubusercontent.com';
+        urlObj.pathname = urlObj.pathname.replace('/blob/', '/');
+        return urlObj.toString();
+      } catch {
+        return null;
+      }
+    };
+
+    if (gitUrl) {
+      const rawUrl = toRawUrl(gitUrl);
+      if (rawUrl) {
+        try {
+          const response = await fetch(rawUrl);
+          if (response.ok) {
+            const text = await response.text();
+            setCustomKnowledge(text);
+            await saveKnowledge(text); // 로컬 DB에 동기화
+            console.log("Knowledge loaded from Git URL.");
+            return;
+          } else {
+            console.warn(`Failed to fetch from Git URL (${response.status}), falling back to local storage.`);
+          }
+        } catch (error) {
+          console.error("Error fetching from Git URL, falling back to local storage:", error);
+        }
+      }
+    }
+    
     // Fallback to local storage
     const knowledge = await getKnowledge();
     setCustomKnowledge(knowledge || '');
+    console.log("Knowledge loaded from local storage.");
   }, []);
 
   useEffect(() => {

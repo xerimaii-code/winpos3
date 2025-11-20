@@ -80,6 +80,15 @@ export const getDeviceSetting = async (key: string): Promise<any> => {
   });
 };
 
+// Git URL 관련 헬퍼 함수 추가
+export const saveGitUrl = async (url: string): Promise<void> => {
+  return saveDeviceSetting('gitUrl', url);
+};
+
+export const getGitUrl = async (): Promise<string | null> => {
+  return getDeviceSetting('gitUrl');
+};
+
 
 // --- Query History 관련 ---
 export const saveQueryHistory = async (item: Omit<QueryHistoryItem, 'id' | 'timestamp'> & { id?: number }): Promise<void> => {
