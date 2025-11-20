@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Save, BrainCircuit, Database } from 'lucide-react';
-import { saveKnowledge } from '../utils/db';
+import { X, Save, BrainCircuit, Database, GitBranch, Download, Loader2 } from 'lucide-react';
+import { saveKnowledge, saveGitUrl, getGitUrl } from '../utils/db';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -15,10 +15,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
   const [activeTab, setActiveTab] = useState<'learning' | 'schema'>('learning');
   const [knowledge, setKnowledge] = useState(initialKnowledge);
   const [isSaving, setIsSaving] = useState(false);
+  const [gitUrl, setGitUrl] = useState('');
+  const [isGitLoading, setIsGitLoading] = useState(false);
   
   useEffect(() => {
     if (isOpen) {
         setKnowledge(initialKnowledge);
+        const fetchGitUrl = async () => {
+          const url = await getGitUrl();
+          setGitUrl(url || '');
+        };
+        fetchGitUrl();
     }
   }, [isOpen, initialKnowledge]);
 
@@ -33,6 +40,38 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
       alert("저장에 실패했습니다.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleSaveGitUrl = async () => {
+    try {
+        await saveGitUrl(gitUrl);
+        alert("Git URL이 저장되었습니다.");
+    } catch (e) {
+        console.error("Failed to save Git URL", e);
+        alert("URL 저장에 실패했습니다.");
+    }
+  };
+
+  const handleLoadFromGit = async () => {
+    if (!gitUrl) {
+      alert("Git URL을 먼저 입력하고 저장해주세요.");
+      return;
+    }
+    setIsGitLoading(true);
+    try {
+      const response = await fetch(gitUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch from URL: ${response.statusText}`);
+      }
+      const text = await response.text();
+      setKnowledge(text);
+      alert("원격 지식 베이스를 성공적으로 불러왔습니다. 내용을 확인 후 하단의 '브라우저에 저장' 버튼을 눌러야 최종 반영됩니다.");
+    } catch (error: any) {
+      console.error("Failed to load from Git URL", error);
+      alert(`불러오기 실패: ${error.message}. URL이 정확한지, CORS 정책을 허용하는지 확인해주세요.`);
+    } finally {
+      setIsGitLoading(false);
     }
   };
 
@@ -57,11 +96,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
         </div>
         <div className="flex-1 p-6 pt-4 overflow-y-auto bg-slate-50">
           {activeTab === 'learning' && (
-            <div className="animate-fade-in-fast">
-              <h4 className="text-sm font-bold text-slate-700 mb-2">사용자 정의 지식</h4>
-              <p className="text-xs text-slate-500 mb-3">DB 스키마 외에 AI에게 알려주고 싶은 업무 규칙, 데이터 코드의 의미 등을 자유롭게 작성해주세요.</p>
-              <textarea value={knowledge} onChange={(e) => setKnowledge(e.target.value)} placeholder="예: '취소된 주문은 sale_status가 9번입니다.'" className="w-full h-64 p-4 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 resize-none text-sm leading-relaxed shadow-inner" />
-              <button onClick={handleSaveKnowledge} disabled={isSaving} className="mt-4 w-full flex items-center justify-center gap-2 px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold text-sm shadow-lg shadow-rose-500/30 transition-all active:scale-95 disabled:opacity-50"><Save className="w-4 h-4" />{isSaving ? "저장 중..." : "브라우저에 저장"}</button>
+            <div className="animate-fade-in-fast space-y-6">
+              <div>
+                <h4 className="text-sm font-bold text-slate-700 mb-2 flex items-center gap-2"><GitBranch className="w-4 h-4 text-slate-500" /> Git 원격 지식 베이스 (선택)</h4>
+                <p className="text-xs text-slate-500 mb-3">GitHub Gist 등 원시 텍스트(raw text) 파일 URL을 통해 여러 기기에서 지식을 동기화할 수 있습니다.</p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                    <input type="text" value={gitUrl} onChange={(e) => setGitUrl(e.target.value)} placeholder="https://gist.githubusercontent.com/.../raw/..." className="flex-1 p-2 bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-rose-500 text-sm shadow-inner" />
+                    <button onClick={handleSaveGitUrl} className="px-3 py-2 text-xs font-bold bg-slate-200 text-slate-700 hover:bg-slate-300 rounded-lg transition-colors flex items-center justify-center gap-1.5"><Save className="w-3 h-3" /> URL 저장</button>
+                    <button onClick={handleLoadFromGit} disabled={isGitLoading || !gitUrl} className="px-3 py-2 text-xs font-bold bg-rose-100 text-rose-700 hover:bg-rose-200 rounded-lg transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
+                        {isGitLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                        {isGitLoading ? '불러오는 중...' : 'URL에서 불러오기'}
+                    </button>
+                </div>
+              </div>
+
+              <hr className="border-slate-200"/>
+
+              <div>
+                <h4 className="text-sm font-bold text-slate-700 mb-2">사용자 정의 지식 (수동 입력)</h4>
+                <p className="text-xs text-slate-500 mb-3">DB 스키마 외에 AI에게 알려주고 싶은 업무 규칙, 데이터 코드의 의미 등을 자유롭게 작성해주세요.</p>
+                <textarea value={knowledge} onChange={(e) => setKnowledge(e.target.value)} placeholder="예: '취소된 주문은 sale_status가 9번입니다.'" className="w-full h-48 p-4 bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-rose-500 resize-none text-sm leading-relaxed shadow-inner" />
+                <button onClick={handleSaveKnowledge} disabled={isSaving} className="mt-4 w-full flex items-center justify-center gap-2 px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold text-sm shadow-lg shadow-rose-500/30 transition-all active:scale-95 disabled:opacity-50"><Save className="w-4 h-4" />{isSaving ? "저장 중..." : "브라우저에 학습 내용 저장"}</button>
+              </div>
+
             </div>
           )}
           {activeTab === 'schema' && (
