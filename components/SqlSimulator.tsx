@@ -31,8 +31,7 @@ export const SqlSimulator: React.FC = () => {
     let gitUrl = await getGitUrl();
 
     if (!gitUrl) {
-        // 올바른 영구적인 Raw URL로 기본값 설정
-        const defaultUrl = 'https://raw.githubusercontent.com/xerimaii-code/winpos3/main/winpos3.txt';
+        const defaultUrl = 'https://raw.githubusercontent.com/xerimaii-code/winpos3/refs/heads/main/winpos3.txt';
         await saveGitUrl(defaultUrl);
         gitUrl = defaultUrl;
         console.log("Default Git URL has been set.");
@@ -42,21 +41,23 @@ export const SqlSimulator: React.FC = () => {
       if (!url || !url.includes('github.com')) return null;
       try {
         const urlObj = new URL(url);
-        // 이미 raw URL인 경우 그대로 반환
-        if (urlObj.hostname === 'raw.githubusercontent.com') {
-            // URL에서 불필요한 token 파라미터 제거
-            urlObj.searchParams.delete('token');
-            return urlObj.toString();
+        
+        // Change hostname to raw if it's not already
+        if (urlObj.hostname === 'github.com') {
+            urlObj.hostname = 'raw.githubusercontent.com';
+            // Clean up path for blob URLs
+            urlObj.pathname = urlObj.pathname.replace('/blob/', '/');
         }
         
-        // 일반 GitHub URL을 raw URL로 변환
-        urlObj.hostname = 'raw.githubusercontent.com';
-        urlObj.pathname = urlObj.pathname.replace('/blob/', '/');
-        // 변환된 URL에서도 token 파라미터 제거
-        urlObj.searchParams.delete('token');
+        // Clean up path for /refs/heads/ which can appear in some copy-pasted URLs
+        urlObj.pathname = urlObj.pathname.replace('/refs/heads/', '/');
+
+        // Always remove search parameters (like tokens) for a permanent URL
+        urlObj.search = '';
+        
         return urlObj.toString();
       } catch {
-        return null;
+        return null; // Invalid URL format
       }
     };
 

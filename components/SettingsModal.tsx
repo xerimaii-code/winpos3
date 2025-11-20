@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import { X, Save, BrainCircuit, Database, Loader2, AlertCircle, CheckCircle, Github, RefreshCw } from 'lucide-react';
 import { saveKnowledge, saveGitUrl, getGitUrl } from '../utils/db';
@@ -36,15 +37,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, i
       if (!url || !url.includes('github.com')) return null;
       try {
         const urlObj = new URL(url);
-        if (urlObj.hostname === 'raw.githubusercontent.com') return url;
         
-        urlObj.hostname = 'raw.githubusercontent.com';
-        const path = urlObj.pathname.replace('/blob/', '/');
-        // '/refs/heads/' 가 포함된 잘못된 경로 수정
-        urlObj.pathname = path.replace('/refs/heads/', '/');
+        // Change hostname to raw if it's not already
+        if (urlObj.hostname === 'github.com') {
+            urlObj.hostname = 'raw.githubusercontent.com';
+            // Clean up path for blob URLs
+            urlObj.pathname = urlObj.pathname.replace('/blob/', '/');
+        }
+        
+        // Clean up path for /refs/heads/ which can appear in some copy-pasted URLs
+        urlObj.pathname = urlObj.pathname.replace('/refs/heads/', '/');
+
+        // Always remove search parameters (like tokens) for a permanent URL
+        urlObj.search = '';
+        
         return urlObj.toString();
       } catch {
-        return null;
+        return null; // Invalid URL format
       }
   };
 
