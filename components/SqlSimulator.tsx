@@ -47,7 +47,7 @@ export const SqlSimulator: React.FC = () => {
 
       const json = await response.json();
       
-      // 백엔드 버전 확인 로직 (v5.1)
+      // 백엔드 버전 확인 로직 (v5.2)
       if (json.apiVersion) {
         setBackendVersion(json.apiVersion);
       } else {
@@ -236,7 +236,7 @@ export const SqlSimulator: React.FC = () => {
                 </div>
                 <div className="bg-slate-950 px-3 py-2 rounded border border-slate-700 text-right">
                     <div className="text-[10px] uppercase text-slate-500 font-bold">API Status</div>
-                    <div className={`text-sm font-mono ${backendVersion.includes('v5.1') ? 'text-blue-400' : 'text-red-400'}`}>
+                    <div className={`text-sm font-mono ${backendVersion.includes('v5.2') ? 'text-blue-400' : 'text-red-400'}`}>
                         {backendVersion}
                     </div>
                 </div>

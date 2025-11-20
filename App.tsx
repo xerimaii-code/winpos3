@@ -25,7 +25,7 @@ const App: React.FC = () => {
               </h1>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-mono text-white bg-blue-600/80 px-2 py-0.5 rounded border border-blue-500 shadow-sm">
-                  Frontend v5.1
+                  Frontend v5.2
                 </span>
               </div>
             </div>
