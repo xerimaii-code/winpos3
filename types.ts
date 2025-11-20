@@ -1,3 +1,4 @@
+
 export interface GuideStep {
   id: number;
   title: string;
@@ -20,4 +21,5 @@ export interface QueryResult {
   sql: string;
   data: MockDataRow[];
   error?: string;
+  summary?: string;
 }

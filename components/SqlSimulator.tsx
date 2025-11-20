@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Database, Loader2, Code, Activity, XCircle, Settings, ChevronDown, ChevronUp, AlertTriangle, Play, ScanBarcode, X, Bookmark, BookmarkPlus } from 'lucide-react';
-import { generateSqlFromNaturalLanguage } from '../services/geminiService';
+import { Search, Database, Loader2, Code, Activity, XCircle, Settings, ChevronDown, ChevronUp, AlertTriangle, Play, ScanBarcode, X, Bookmark, BookmarkPlus, BrainCircuit } from 'lucide-react';
+import { generateSqlFromNaturalLanguage, analyzeQueryResult } from '../services/geminiService';
 import { QueryResult } from '../types';
 import { SettingsModal } from './SettingsModal';
 import { getKnowledge, saveQueryHistory } from '../utils/db';
@@ -11,6 +11,7 @@ import { MOCK_USERS } from '../constants';
 export const SqlSimulator: React.FC = () => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [testLoading, setTestLoading] = useState(false);
   const [result, setResult] = useState<QueryResult | null>(null);
   const [useRealApi] = useState(true);
@@ -134,6 +135,7 @@ export const SqlSimulator: React.FC = () => {
 
     setLoading(true);
     setResult(null);
+    setIsAnalyzing(false);
     try {
       const sql = typeof queryToRun === 'string' 
         ? queryToRun 
@@ -155,7 +157,16 @@ export const SqlSimulator: React.FC = () => {
             throw new Error(errData.error || errData.details || `Server responded with ${response.status}`);
           }
           const json = await response.json();
-          setResult({ sql, data: json.data || [] });
+          const queryData = json.data || [];
+          setResult({ sql, data: queryData });
+
+          if (queryData.length > 0 && naturalInput) { // Only analyze if it was a natural language query
+            setIsAnalyzing(true);
+            const summary = await analyzeQueryResult(queryData);
+            setResult(prev => prev ? { ...prev, summary } : null);
+            setIsAnalyzing(false);
+          }
+
         } catch (apiErr: any) {
            let errMsg = apiErr.message;
            if (apiErr.name === 'AbortError') errMsg = 'Request Timed Out (15s). Check network/firewall.';
@@ -187,15 +198,15 @@ export const SqlSimulator: React.FC = () => {
   
   const handleUseQuery = (name: string, query: string) => {
     setInput(name);
-    // Directly execute the saved SQL
     handleSimulate(query);
     setIsHistoryOpen(false);
   };
 
   const getStatusIndicator = () => {
-    if (loading) return (
+    const totalLoading = loading || isAnalyzing;
+    if (totalLoading) return (
         <div className="flex items-center gap-2 px-3 py-1 bg-blue-100 border border-blue-200 text-blue-700 rounded-full animate-pulse">
-          <Loader2 className="w-3.5 h-3.5 animate-spin" /> <span className="text-xs font-bold">RUNNING...</span>
+          <Loader2 className="w-3.5 h-3.5 animate-spin" /> <span className="text-xs font-bold">{loading ? 'RUNNING...' : 'ANALYZING...'}</span>
         </div>
     );
     if (connectionStatus === 'success') return (
@@ -241,15 +252,31 @@ export const SqlSimulator: React.FC = () => {
             </div>
         </div>
         <div className="relative flex-1"><input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSimulate()} placeholder="상품명, 바코드 또는 질문..." className="w-full bg-slate-50 border border-slate-300 text-slate-900 rounded-xl py-3 pl-10 pr-10 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:border-transparent transition-all placeholder-slate-400 font-medium" /><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />{input && (<button onClick={handleClear} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-full"><X className="w-4 h-4" /></button>)}</div>
-        <div className="flex gap-2 mt-3"><button onClick={() => handleSimulate()} disabled={loading} className="flex-1 bg-rose-600 hover:bg-rose-700 text-white py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 disabled:opacity-70 disabled:active:scale-100">{loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5 fill-current" />} {loading ? '실행 중...' : '실행'}</button><button onClick={() => alert("Barcode scanning not yet implemented.")} className="flex-1 bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md active:scale-95"><ScanBarcode className="w-5 h-5" /> SCAN</button></div>
+        <div className="flex gap-2 mt-3"><button onClick={() => handleSimulate()} disabled={loading || isAnalyzing} className="flex-1 bg-rose-600 hover:bg-rose-700 text-white py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md active:scale-95 disabled:opacity-70 disabled:active:scale-100">{loading || isAnalyzing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5 fill-current" />} {loading ? '실행 중...' : (isAnalyzing ? '분석 중...' : '실행')}</button><button onClick={() => alert("Barcode scanning not yet implemented.")} className="flex-1 bg-slate-800 hover:bg-slate-900 text-white py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md active:scale-95"><ScanBarcode className="w-5 h-5" /> SCAN</button></div>
       </div>
       {result && (
         <div className="space-y-4 animate-fade-in">
+          { (result.summary || isAnalyzing) && 
+            <div className="bg-rose-50 border-l-4 border-rose-400 p-4 rounded-r-lg shadow-sm">
+                <div className="flex items-start">
+                    <div className="flex-shrink-0"><BrainCircuit className="h-5 w-5 text-rose-500" /></div>
+                    <div className="ml-3">
+                        <h3 className="text-sm font-bold text-rose-800">AI 분석 요약</h3>
+                        {isAnalyzing ? (
+                            <p className="text-sm text-rose-700 mt-1 flex items-center gap-2 animate-pulse"><Loader2 className="w-4 h-4 animate-spin" /> 결과를 분석하는 중...</p>
+                        ) : (
+                            <p className="text-sm text-rose-700 mt-1">{result.summary || '분석 결과가 없습니다.'}</p>
+                        )}
+                    </div>
+                </div>
+            </div>
+          }
+
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col min-h-[200px]">
             <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between"><div className="flex items-center gap-2"><Database className="w-4 h-4 text-rose-600" /><span className="text-sm font-bold text-slate-700">조회 결과 <span className="text-slate-400 font-normal">({result.data.length}건)</span></span></div></div>
             <div className="p-0 flex-1 bg-slate-50/30">
               {result.error ? (<div className="p-6 text-red-600 text-sm font-mono whitespace-pre-wrap bg-red-50 h-full flex items-center justify-center text-center"><div className="flex flex-col items-center"><AlertTriangle className="w-6 h-6 mx-auto mb-2 text-red-500" /><span>{result.error}</span></div></div>) : (
-                <><div className="block md:hidden p-3 space-y-3">{result.data.length > 0 ? result.data.map((row, idx) => (<div key={idx} className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm space-y-2">{Object.entries(row).map(([key, val], vIdx) => (<div key={vIdx} className="flex justify-between items-start border-b border-slate-50 last:border-0 pb-1 last:pb-0"><span className="text-xs font-bold text-slate-500 uppercase tracking-wide w-1/3 truncate">{key}</span><span className="text-sm font-medium text-slate-800 text-right w-2/3 break-words">{val === null ? <span className="text-slate-300">NULL</span> : (typeof val === 'object' ? JSON.stringify(val) : val?.toString())}</span></div>))}</div>)) : (<div className="py-8 text-center text-slate-400 text-sm">데이터가 없습니다.</div>)}</div>
+                <><div className="block md:hidden p-3 space-y-3">{result.data.length > 0 ? result.data.map((row, idx) => (<div key={idx} className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm space-y-2">{Object.entries(row).map(([key, val], vIdx) => (<div key={vIdx} className="flex justify-between items-start border-b border-slate-100 last:border-0 pb-1.5 last:pb-0"><span className="text-xs font-bold text-slate-500 uppercase tracking-wide w-2/5 truncate">{key}</span><span className="text-sm font-medium text-slate-800 text-right w-3/5 break-words">{val === null ? <span className="text-slate-300">NULL</span> : (typeof val === 'object' ? JSON.stringify(val) : val?.toString())}</span></div>))}</div>)) : (<div className="py-8 text-center text-slate-400 text-sm">데이터가 없습니다.</div>)}</div>
                 <div className="hidden md:block overflow-x-auto"><table className="w-full text-left text-sm text-slate-600"><thead className="bg-slate-100 text-slate-700 uppercase font-semibold sticky top-0"><tr>{result.data.length > 0 ? Object.keys(result.data[0]).map(key => (<th key={key} className="px-4 py-3 whitespace-nowrap border-b border-slate-200 bg-slate-100">{key}</th>)) : <th className="px-4 py-3 border-b border-slate-200">Result</th>}</tr></thead><tbody className="divide-y divide-slate-100">{result.data.length > 0 ? result.data.map((row, idx) => (<tr key={idx} className="hover:bg-rose-50/50 transition-colors">{Object.values(row).map((val, vIdx) => (<td key={vIdx} className="px-4 py-3 max-w-xs truncate border-r border-slate-100 last:border-0">{val === null ? <span className="text-slate-300 italic">NULL</span> : (typeof val === 'object' ? JSON.stringify(val) : val?.toString())}</td>))}</tr>)) : (<tr><td colSpan={100} className="px-4 py-12 text-center text-slate-400">데이터가 없습니다.</td></tr>)}</tbody></table></div></>
               )}
             </div>

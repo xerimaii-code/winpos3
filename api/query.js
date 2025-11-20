@@ -43,7 +43,7 @@ export default async function handler(req, res) {
     
     res.status(200).json({ 
       data: result.recordset,
-      apiVersion: 'v9.4 (Backend Updated)'
+      apiVersion: 'v9.5 (Backend Updated)'
     });
     
   } catch (error) {
@@ -52,7 +52,7 @@ export default async function handler(req, res) {
       error: 'Database Error', 
       details: error.message, 
       code: error.code,
-      apiVersion: 'v9.4 (Backend Updated)'
+      apiVersion: 'v9.5 (Backend Updated)'
     });
   }
 }

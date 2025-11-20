@@ -61,3 +61,42 @@ export const generateSqlFromNaturalLanguage = async (
     return "SELECT * FROM outm_yymm -- Error: API Key invalid or Quota exceeded";
   }
 };
+
+export const analyzeQueryResult = async (data: any[]): Promise<string> => {
+  if (!data || data.length === 0) {
+    return "실행 결과 데이터가 없습니다.";
+  }
+
+  try {
+    const ai = getAiClient();
+    if (ai.apiKey === 'DUMMY_KEY_FOR_UI_RENDERING') {
+      return ""; // Don't show an error, just return empty.
+    }
+    const dataPreview = JSON.stringify(data.slice(0, 5)); // Send a preview to save tokens
+
+    const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: `Analyze the following JSON data which is a result of a SQL query. Provide a concise, one-sentence summary for a business user in Korean. Be friendly and direct.
+        
+        Example summaries:
+        - "5월 총 매출은 1,234,567원입니다."
+        - "재고가 10개 미만인 상품이 3개 있습니다."
+        - "가장 많이 팔린 상품은 '신라면'입니다."
+
+        Do not mention the JSON format. Do not explain the columns. Just provide the key insight.
+
+        Data:
+        ${dataPreview}
+        `,
+        config: {
+            systemInstruction: "You are a helpful data analyst who provides quick insights in Korean.",
+            thinkingConfig: { thinkingBudget: 0 } 
+        }
+    });
+
+    return response.text || "결과를 분석하는 데 실패했습니다.";
+  } catch (error) {
+    console.error("Gemini Data Analysis Error:", error);
+    return "결과를 분석하는 중 오류가 발생했습니다.";
+  }
+};
